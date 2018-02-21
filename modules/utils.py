@@ -165,7 +165,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
     except Exception:
         return None
 
-    # send SMB1 NegotiateProtocolRequest with SMB2 dialects. will lead to SMB2
+    # send SMB1 NegotiateProtocolRequest with SMB2 dialects. should lead to SMB2
     # negotiation even if SMB1 is disabled.
     s.send(binascii.unhexlify(
         b'000000d4ff534d4272000000001843c80000000000000000000000000000'
@@ -242,10 +242,11 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         data = s.recv(4096)
         ntlmssp = data[data.find(b'NTLMSSP\x00\x02\x00\x00\x00'):]
         s.shutdown(socket.SHUT_RDWR)
+
+        # send SMB1 NegotiateProtocolRequest with SMB1 only dialects to fingerprint SMB1.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         s.connect((addr, port))
-        # send SMB1 NegotiateProtocolRequest with SMB1 dialects only
         s.send(binascii.unhexlify(
             b'000000beff534d4272000000001843c80000000000000000000000000000'
             b'feff00000000009b00025043204e4554574f524b2050524f4752414d2031'
@@ -258,7 +259,8 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         try:
             data = s.recv(4096)
             smb1_signing = data[39]
-        except ConnectionResetError:
+        except (ConnectionResetError, IndexError):
+            # SMB1 likely not supported
             s = None
 
     if s:
