@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+import socks
 import socket
 import struct
 import argparse
@@ -58,9 +59,17 @@ parser.add_argument('-x', '--nmap', help='nmap xml file. checks for open 445')
 parser.add_argument('-t', '--timeout', type=float, default=2, help='socket timeout in seconds. default 2')
 parser.add_argument('--smb-port', dest='smb_port', type=int, default=445, help='default 445')
 parser.add_argument('--threads', type=int, default=50, help='worker thread count. defaults to 50')
+parser.add_argument('--proxy', help='socks5 proxy: eg 127.0.0.1:8888')
 
 args = parser.parse_args()
 hosts = set(args.hosts)
+
+if args.proxy:
+    proxy_host, proxy_port = args.proxy.split(':')
+    socks.set_default_proxy(socks.SOCKS5, proxy_host, int(proxy_port))
+    socket.socket = socks.socksocket
+    #dns.query.socket_factory = socks.socksocket
+
 if args.nmap:
     scan = ET.parse(args.nmap).getroot()
     if not scan.tag == 'nmaprun':

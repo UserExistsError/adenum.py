@@ -10,11 +10,21 @@ g_parser = None
 def handler(args, conn):
     sidstr = ''
     for s in args.sids:
-        sidstr += '(objectSid={})'.format(s)
-    conn.search(args.search_base, '(&(objectCategory=user)(|{}))'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName'])
+        sid_hex = sid_to_ldap(str_to_sid(s))
+        sidstr += '(objectSid={})'.format(sid_hex)
+    conn.search(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn'])
     for r in conn.response:
-        name = r['dn'] if args.dn else r['cn']
-        print(name, r['attributes']['objectSid'])
+        print(r)
+        a = r['attributes']
+        if args.dn:
+            name = r['dn']
+        elif len(a['samAccountName']):
+            name = a['samAccountName'][0]
+        elif len(a['userPrincipalName']):
+            name = a['userPrincipalName'][0]
+        else:
+            name = r['attributes']['cn'][0]
+        print(name, sid_to_str(r['attributes']['objectSid'][0]))
 
 def get_parser():
     return g_parser

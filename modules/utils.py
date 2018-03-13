@@ -24,34 +24,6 @@ private_addrs = (
     [167772160,  4278190080], # 10.0.0.0,    255.0.0.0
 )
 
-# class AttributeDict(collections.MutableMapping):
-#     ''' ldap3 already provides case-insensitive attribute access '''
-#     def __init__(self, *args):
-#         if len(args):
-#             d = args[-1]
-#             self._store = {k.lower():(k,d[k]) for k in d}
-#         else:
-#             self._store = {}
-#     def __delitem__(self, key):
-#         del self._store[key.lower()]
-#     def __setitem__(self, key, value):
-#         self._store[key.lower()] = (key, value)
-#     def __getitem__(self, key):
-#         return self._store[key.lower()][1]
-#     def __len__(self):
-#         return len(self._store)
-#     def __iter__(self):
-#         self._keys = self.keys()
-#         return self
-#     def __next__(self):
-#         if len(self._keys) == 0:
-#             raise StopIteration
-#         k = self._keys.pop()
-#         return self[k]
-#     def keys(self):
-#         return [self._store[k][0] for k in self._store]
-        
-
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
     search_base = 'OU=Domain Controllers,'+search_base
     conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.LEVEL, attributes=['dNSHostName'])
@@ -155,6 +127,25 @@ def parse_target_info(ti, info):
     #     info['time'] = filetime_to_str(struct.unpack('<Q', v)[0])
     parse_target_info(ti[4+l:], info)
 
+def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=TIMEOUT):
+    ''' get the hosts domain, fully qualified, any way we can '''
+    if None not in name_servers:
+        name_servers.append(None) # use default name server
+    logger.debug('Getting domain for {} by DNS'.format(addr))
+    for ns in name_servers:
+        fqdn = get_fqdn_by_addr(addr, ns, timeout)
+        if fqdn:
+            return fqdn
+    if conn and args:
+        logger.debug('Getting domain for {} by LDAP'.format(addr))
+        info = get_dc_info(args, conn)
+        try:
+            return info['dnsHostName']
+        except:
+            pass
+    logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
+    info = get_smb_info(addr, timeout, port)
+    return info.get('dns_name', None)
 
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
     info = {'smbVersions':set()}
@@ -296,7 +287,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
     ti_len = struct.unpack('<H', ntlmssp[40:42])[0]
     ti_offset = struct.unpack('<L', ntlmssp[44:48])[0]
     ti = ntlmssp[ti_offset:ti_offset+ti_len]
-    logging.debug('TargetInfo-length '+str(ti_len))
+    logger.debug('TargetInfo-length '+str(ti_len))
     parse_target_info(ti, info)
     info['smbVersions'] = ', '.join(map(str, info['smbVersions']))
     # ref: https://blogs.technet.microsoft.com/josebda/2010/12/01/the-basics-of-smb-signing-covering-both-smb1-and-smb2/

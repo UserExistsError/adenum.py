@@ -71,15 +71,14 @@ https://msdn.microsoft.com/en-us/library/ms675090(v=vs.85).aspx
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
     user_parser = parser.add_mutually_exclusive_group()
-    user_parser.add_argument('-u', '--username', default='', help='AD user. default is null user.')
+    user_parser.add_argument('-u', '--username', default='', help='may specify DOMAIN\\USER. default is null user')
     user_parser.add_argument('--anonymous', action='store_true', help='anonymous access')
     parser.add_argument('-p', '--password', default=hashlib.new('md4', b'').hexdigest(), help='password')
     parser.add_argument('--nthash', action='store_true', help='password is an NTLM hash')
     parser.add_argument('-P', dest='prompt', action='store_true', help='prompt for password')
     parser.add_argument('--proxy', help='socks5 proxy: eg 127.0.0.1:8888')
     parser.add_argument('-s', '--server', help='domain controller address or name')
-    parser.add_argument('-H', '--hostname', help='DC hostname. never required')
-    parser.add_argument('-d', '--domain', help='default is to get domain of server')
+    parser.add_argument('-d', '--domain', help='user domain. may be different than domain of --server (trusts)')
     parser.add_argument('--timeout', type=int, default=TIMEOUT, help='timeout for network operations')
     parser.add_argument('--threads', type=int, default=20, help='name resolution/uptime worker count')
     parser.add_argument('--port', type=int, help='default 389 or 636 with --tls. 3268 for global catalog')
@@ -94,6 +93,8 @@ if __name__ == '__main__':
     #parser.add_argument('--cert', help='')
     #parser.add_argument('--auth', default='ntlm', type=str.lower, choices=['ntlm', 'kerb'], help='auth type')
     parser.set_defaults(search_base=None)
+    parser.set_defaults(server_domain=None) # domain of server being queried
+    parser.set_defaults(server_fqdn=None)
     parser.set_defaults(handler=None)
 
     tls_group = parser.add_mutually_exclusive_group()
@@ -126,6 +127,7 @@ if __name__ == '__main__':
 
     if args.proxy:
         proxy_host, proxy_port = args.proxy.split(':')
+        logger.debug('Setting SOCKS5 proxy: {}:{}'.format(proxy_host, int(proxy_port)))
         socks.set_default_proxy(socks.SOCKS5, proxy_host, int(proxy_port))
         socket.socket = socks.socksocket
         dns.query.socket_factory = socks.socksocket
@@ -190,13 +192,21 @@ if __name__ == '__main__':
             sys.exit()
         logger.info('Found a domain controller for {} at {}'.format(args.domain, args.server))
 
-    args.search_base = 'dc='+args.domain.replace('.', ',dc=')
-    logger.debug('DC     '+args.server)
-    logger.debug('PORT   '+str(args.port))
-    logger.debug('DOMAIN '+args.domain)
-    logger.debug('LOGIN  '+args.username)
-    logger.debug('BASE   '+args.search_base)
-    logger.debug('DNS    '+ (args.name_server or 'default'))
+    # get search base. should be root of DC being queried
+    args.server_fqdn = addr_to_fqdn(args.server, [args.name_server, args.server], timeout=args.timeout)
+    if args.server_fqdn:
+        args.hostname = args.server_fqdn.split('.', maxsplit=1)[0]
+        args.server_domain = args.server_fqdn.split('.', maxsplit=1)[-1]
+        args.search_base = 'dc='+args.server_domain.replace('.', ',dc=')
+    else:
+        print('Error: unable to determine domain for '+args.server)
+        sys.exit()
+
+    logger.debug('DC         {} ({})'.format(args.server_domain, args.server))
+    logger.debug('Port       '+str(args.port))
+    logger.debug('Username   {}\\{}'.format(args.domain, args.username))
+    logger.debug('SearchBase '+args.search_base)
+    logger.debug('NameServer '+ (args.name_server or 'default'))
     if not is_private_addr(args.server) and not args.insecure:
         raise Warning('Aborting due to public LDAP server. use --insecure to override')
 

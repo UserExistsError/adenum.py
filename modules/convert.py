@@ -35,6 +35,31 @@ def gt_to_dt(g):
 def gt_to_str(g):
     return gt_to_dt(g).strftime('%m/%d/%Y %I:%M:%S %p')
 
+def sid_to_ldap(sid):
+    ''' convert sid to format usable in ldap queries by specifying each
+    byte as \AB '''
+    sid_hex = ''
+    for b in sid:
+        sid_hex += '\\{:02x}'.format(b)
+    return sid_hex
+
+def str_to_sid(sid_str):
+    ''' convert SID as string to bytes object '''
+    parts = sid_str.split('-')
+    rev = int(parts[1])
+    auth = int(parts[2])
+    ids = parts[3:]
+    sid = struct.pack('<BB', rev, len(ids))
+    sid += struct.pack('>Q', auth)[2:]
+    sid += struct.pack('<'+str(len(ids))+'I', *[int(i) for i in ids])
+    return sid
+
+def sid_to_str(sid):
+    ''' accepts SID as returned by ldap and converts to string '''
+    sid_str = 'S-{}-{}-'.format(sid[0], struct.unpack('>Q', b'\x00\x00'+sid[2:8])[0])
+    ids = struct.unpack('<'+str(sid[1])+'I', sid[8:])
+    sid_str += '-'.join([str(i) for i in ids])
+    return sid_str
 
 def gid_from_sid(sid):
     if type(sid) == str:

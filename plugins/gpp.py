@@ -73,7 +73,7 @@ def extract_cpassword(data, folder):
 
 def handler(args, conn):
     ''' look for sysvol\domain\policies\{GUID}\*\Preferences\{groups,scheduledtasks}\*.xml '''
-    dc_hostname = args.hostname
+    dc_hostname = args.hostname or args.server
     conn = SMBConnection(args.username, args.password, 'adenum', dc_hostname, use_ntlm_v2=True,
                          domain=args.domain, is_direct_tcp=(args.smb_port != 139))
     conn.connect(args.server, port=args.smb_port)

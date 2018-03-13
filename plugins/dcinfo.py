@@ -23,7 +23,7 @@ def handler(args, conn):
         6:'2012r2',
         7:'2016',
     }
-    servers = get_domain_controllers_by_ldap(get_connection(args), args.search_base, args.timeout)
+    servers = get_domain_controllers_by_ldap(get_connection(args), args.search_base, args.name_server, args.timeout)
     for addr, hostname in servers:
         r = get_dc_info(args, get_connection(args, addr))
         print('address                         ', addr)

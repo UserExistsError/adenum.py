@@ -30,6 +30,7 @@ def handler(args, conn):
         print('DisplayName              ', ' '.join(a['displayName']))
         print('E-mail                   ', ' '.join(a['mail']))
         print('JobTitle                 ', ' '.join(a['title']))
+        print('SID                      ', sid_to_str(a['objectSid'][0]))
 
         try:
             print('AccountCreated           ', gt_to_str(a['whenCreated'][0]))
