@@ -128,7 +128,7 @@ if __name__ == '__main__':
     if args.proxy:
         proxy_host, proxy_port = args.proxy.split(':')
         logger.debug('Setting SOCKS5 proxy: {}:{}'.format(proxy_host, int(proxy_port)))
-        socks.set_default_proxy(socks.SOCKS5, proxy_host, int(proxy_port))
+        socks.set_default_proxy(socks.SOCKS5, proxy_host, int(proxy_port), True)
         socket.socket = socks.socksocket
         dns.query.socket_factory = socks.socksocket
 
@@ -193,7 +193,7 @@ if __name__ == '__main__':
         logger.info('Found a domain controller for {} at {}'.format(args.domain, args.server))
 
     # get search base. should be root of DC being queried
-    args.server_fqdn = addr_to_fqdn(args.server, [args.name_server, args.server], timeout=args.timeout)
+    args.server_fqdn = addr_to_fqdn(args.server, [args.name_server, args.server], port=args.smb_port, timeout=args.timeout)
     if args.server_fqdn:
         args.hostname = args.server_fqdn.split('.', maxsplit=1)[0]
         args.server_domain = args.server_fqdn.split('.', maxsplit=1)[-1]
@@ -202,7 +202,7 @@ if __name__ == '__main__':
         print('Error: unable to determine domain for '+args.server)
         sys.exit()
 
-    logger.debug('DC         {} ({})'.format(args.server_domain, args.server))
+    logger.debug('DC         {} ({})'.format(args.hostname, args.server))
     logger.debug('Port       '+str(args.port))
     logger.debug('Username   {}\\{}'.format(args.domain, args.username))
     logger.debug('SearchBase '+args.search_base)

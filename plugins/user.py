@@ -12,7 +12,15 @@ def get_parser():
     return g_parser
 
 def handler(args, conn):
-    for u in [get_user_info(conn, args.search_base, user)[0] for user in args.users]:
+    users = args.users
+    if args.userfile:
+        users.extend([u.strip() for u in open(args.userfile)])
+    for user in set(users):
+        try:
+            u = get_user_info(conn, args.search_base, user)[0]
+        except:
+            logger.error('Failed to find user: '+user)
+            continue
         if not u.get('attributes'):
             continue
         a = u['attributes']
@@ -87,7 +95,8 @@ def get_arg_parser(subparser):
     if not g_parser:
         g_parser = subparser.add_parser(PLUGIN_NAME, help='get user info')
         g_parser.set_defaults(handler=handler)
-        g_parser.add_argument('users', nargs='+', help='users to search')
+        g_parser.add_argument('users', nargs='*', help='users to search')
+        g_parser.add_argument('-f', '--userfile', help='file of users')
     return g_parser
 
 

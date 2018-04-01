@@ -29,7 +29,7 @@ def handler(args, conn):
         print('address                         ', addr)
         print('dnsHostName                     ', r['dnsHostName'])
         print('supportedLDAPVersions           ', ', '.join(map(str, r['supportedLDAPVersion'])))
-        print('search_base                     ', r['search_base'])
+        print('searchBase                      ', r['search_base'])
         print('domainControllerFunctionality   ', func_levels[r['domainControllerFunctionality']])
         print('domainFunctionality             ', func_levels[r['domainFunctionality']])
         print('forestFunctionality             ', func_levels[r['forestFunctionality']])

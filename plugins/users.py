@@ -39,11 +39,19 @@ def handler(args, conn):
                 if args.dn:
                     print(u['dn'])
                 else:
+                    sid = ''
                     try:
-                        #print('{} ({})'.format(u['attributes']['userPrincipalName'][0].split('@')[0], u['objectSid']))
-                        print(u['attributes']['userPrincipalName'])
+                        sid = sid_to_str(u['attributes']['objectSid'][0])
                     except:
-                        print(u['attributes'].get('samAccountName', [u['dn']])[0])
+                        pass
+                    try:
+                        print('{} {}'.format(u['attributes']['userPrincipalName'][0].split('@')[0], sid))
+                        #print(u['attributes']['userPrincipalName'][0])
+                    except:
+                        name = u['attributes'].get('samAccountName', None)
+                        if not name:
+                            name = u['dn']
+                        print('{} {}'.format(name, sid))
 
 def get_parser():
     return g_parser

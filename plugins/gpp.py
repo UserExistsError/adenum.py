@@ -83,7 +83,7 @@ def handler(args, conn):
                 pref = '\\'.join([args.domain, 'Policies', p.filename, mu, 'Preferences'])
                 logger.debug('PREF '+pref)
                 for t in list_sysvol(conn, pref, SMB_FILE_ATTRIBUTE_DIRECTORY):
-                    if t.filename.lower() in ['groups', 'drives', 'scheduledtasks', 'datasources', 'services']:
+                    if t.filename.lower() in ['groups', 'drives', 'scheduledtasks', 'datasources', 'services', 'printers']:
                         path = '\\'.join([pref, t.filename])
                         for x in list_sysvol(conn, path, 55, '*.xml'):
                             if x.file_size > 0:

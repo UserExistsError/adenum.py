@@ -210,9 +210,11 @@ def get_user_info(conn, search_base, user):
     return conn.response
 
 def get_default_pwd_policy(args, conn):
-    ''' default password policy is what gets returned by "net accounts"
+    ''' ref https://msdn.microsoft.com/en-us/library/cc232769.aspx
+    default password policy is what gets returned by "net accounts"
     The policy is stored as a GPO on the sysvol share. It's stored in an INI file.
-    The default policy is not returned by get_pwd_policy() '''
+    The default policy is not returned by get_pwd_policy()
+    TODO: default policy may be stored somewhere else '''
     if conn:
         conn.search('cn=Policies,cn=System,'+args.search_base, '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
                     attributes=['gPCFileSysPath'])

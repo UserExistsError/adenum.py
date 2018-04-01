@@ -128,7 +128,15 @@ def parse_target_info(ti, info):
     parse_target_info(ti[4+l:], info)
 
 def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=TIMEOUT):
-    ''' get the hosts domain, fully qualified, any way we can '''
+    ''' get the hosts domain, fully qualified, any way we can. try SMB first since all
+    domain controllers should have 445 open. also, if you are forwarding your connection,
+    this method will get the correct hostname. aborts for 127. ips if SMB fails '''
+    logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
+    info = get_smb_info(addr, timeout, port)
+    if info and info.get('dns_name', None):
+        return info.get('dns_name')
+    if addr.startswith('127.'):
+        raise ValueError('Cannot do name lookup on 127 addresses')
     if None not in name_servers:
         name_servers.append(None) # use default name server
     logger.debug('Getting domain for {} by DNS'.format(addr))
@@ -143,9 +151,7 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
             return info['dnsHostName']
         except:
             pass
-    logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
-    info = get_smb_info(addr, timeout, port)
-    return info.get('dns_name', None)
+    return None
 
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
     info = {'smbVersions':set()}
