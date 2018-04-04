@@ -210,6 +210,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         boot_dt = datetime.datetime.now() - up_td
         info['uptime'] = str(up_td) + ' (booted '+ boot_dt.strftime('%H:%M:%S %d %b %Y')+')'
         info['date'] = system_dt.strftime('%H:%M:%S %d %b %Y')
+        msgid = 1
         if dialect == 0x2ff:
             # send SMB2 NegotiateProtocolRequest with random client GUID and salt
             s.send(binascii.unhexlify(
@@ -223,18 +224,20 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
             )
             data = s.recv(4096)
             dialect = struct.unpack('<H', data[0x48:0x4a])[0]
+            msgid += 1
             if dialect >= 0x300:
                 info['smbVersions'].add(3)
         info['smbNegotiated'] = hex(dialect)
         logger.debug('MaxSMBVersion: '+hex(dialect))
         # send SMB2 SessionSetupRequest
         s.send(binascii.unhexlify(
-            b'000000a2fe534d4240000100000000000100002000000000000000000200'
-            b'000000000000000000000000000000000000000000000000000000000000'
-            b'000000000000000019000001010000000000000058004a00000000000000'
-            b'0000604806062b0601050502a03e303ca00e300c060a2b06010401823702'
-            b'020aa22a04284e544c4d5353500001000000158208620000000028000000'
-            b'0000000028000000060100000000000f'
+            b'000000a2fe534d424000010000000000010000200000000000000000') + struct.pack('<Q', msgid) + \
+            binascii.unhexlify(
+                b'000000000000000000000000000000000000000000000000'
+                b'000000000000000019000001010000000000000058004a00000000000000'
+                b'0000604806062b0601050502a03e303ca00e300c060a2b06010401823702'
+                b'020aa22a04284e544c4d5353500001000000158208620000000028000000'
+                b'0000000028000000060100000000000f'
         ))
         data = s.recv(4096)
         ntlmssp = data[data.find(b'NTLMSSP\x00\x02\x00\x00\x00'):]
