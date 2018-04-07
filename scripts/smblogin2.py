@@ -2,7 +2,7 @@
 '''
 Login to hosts and attempt to access the ADMIN$ share. ADMIN$ is used as quick check
 to see if the user has administrative access on a host. Successful logins will be
-reported as "Success" while successful ADMIN$ access will show "*Success".
+reported as "Success" while successful ADMIN$ access will show "Success:ADMIN".
 
 Example
 
@@ -55,7 +55,7 @@ def login(host, args):
         # for s in smbconn.listShares():
         #     print(s['shi1_netname'][:-1])
         smbconn.connectTree(r'ADMIN$')
-        status = '*Success'
+        status = 'Success:ADMIN'
     except Exception as e:
         error_code = e.getErrorCode()
 
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--domain', default='.', help='domain. default is local')
     parser.add_argument('-w', '--threads', type=int, default=1, help='default 1')
     parser.add_argument('-t', '--timeout', type=int, default=3, help='socket timeout. default 3s')
-    parser.add_argument('-f', '--file', help='address file, 1 per line')
+    parser.add_argument('-f', '--file', help='hosts file, 1 per line')
     parser.add_argument('hosts', nargs='*', help='hostnames or addresses')
     args = parser.parse_args()
 

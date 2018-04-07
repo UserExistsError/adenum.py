@@ -1,7 +1,9 @@
 #!/usr/bin/env python2
 '''
-Enumerate active users on given hosts using MSRPC over SMB. The Win32 API is NetWkstaUserEnum.
+Enumerate logged on users on given hosts using MSRPC over SMB. The Win32 API is NetWkstaUserEnum.
 Will generally require local or domain admin creds.
+
+See https://msdn.microsoft.com/en-us/library/windows/desktop/aa370669(v=vs.85).aspx
 '''
 from __future__ import print_function
 import sys
@@ -42,14 +44,16 @@ def query_thread(param):
         resp = fNetrWkstaUserEnum(smbconn) # throws impacket.dcerpc.v5.rpcrt.DCERPCException
     except Exception as e:
         sys.stdout.write('ERROR {}: {}\n'.format(host, str(e)))
+        # abort if domain login failed to prevent lockout
         if type(e) == impacket.smbconnection.SessionError:
-            if e.getErrorCode() == STATUS_LOGON_FAILURE and args.domain != '.':
+            if e.getErrorCode() == STATUS_LOGON_FAILURE and args.domain != '.' and smbconn.getServerDomain() != '':
                 raise RuntimeError('Aborting: domain creds are invalid, preventing lockout')
         return
+
     sessions = {}
     for session in resp['UserInfo']['WkstaUserInfo']['Level1']['Buffer']:
         username = session['wkui1_username'][:-1]
-        logon_domain = session['wkui1_logon_domain'][:-1]
+        logon_domain = session['wkui1_logon_domain'][:-1] or '.'
         oth_domains = session['wkui1_oth_domains'][:-1]
         logon_server = session['wkui1_logon_server'][:-1]
         k = '{}\\{}'.format(logon_domain, username)

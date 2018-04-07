@@ -16,6 +16,18 @@ from modules.names import *
 
 logger = logging.getLogger(__name__)
 
+def escape(s):
+    ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
+    mapping = {'*': r'\2a',
+               '(': r'\28',
+               ')': r'\29',
+               '\\': r'\5c',
+               'NUL': r'\00',
+               '/': r'\2f'}
+    e = ''
+    for c in s:
+        e += mapping.get(c, c)
+    return e
 
 class MyMD4Class():
     ''' class to add pass-the-hash support to pysmb '''
@@ -158,7 +170,7 @@ def get_pwd_policy(conn, search_base):
 
 def get_user_info(conn, search_base, user):
     user_dn = get_user_dn(conn, search_base, user)
-    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(user_dn), attributes=['allowedAttributes'])
+    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=['allowedAttributes'])
     allowed = set([a.lower() for a in conn.response[0]['attributes']['allowedAttributes']])
     attributes = [
         #'msexchhomeservername',
@@ -206,7 +218,7 @@ def get_user_info(conn, search_base, user):
         'objectSid',
     ]
     attrs = [a for a in attributes if a.lower() in allowed]
-    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(user_dn), attributes=attrs)
+    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=attrs)
     return conn.response
 
 def get_default_pwd_policy(args, conn):

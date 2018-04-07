@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 PLUGIN_NAME='query'
 g_parser = None
 
+EXAMPLES='''
+        # look for users by last name
+        query -f '(&(objectCategory=user)(displayName=*LASTNAME*)' -s subtree userPrincipalName samAccountName description
+        # look for exchange servers
+        query -f '(&(objectCategory=computer)(name=*EXCH*)' -s subtree description dNSHostName operatingSystemVersion
+'''
+
 def get_parser():
     return g_parser
 
@@ -16,6 +23,14 @@ def custom_query(conn, base, _filter, scope=ldap3.SUBTREE, attrs=None):
     return conn.response
 
 def handler(args, conn):
+    if args.examples:
+        print('Examples')
+        print(EXAMPLES)
+        return
+    if not args.filter:
+        print('-f, --filter is required')
+        return
+
     if args.scope.lower() == 'level':
         scope = ldap3.LEVEL
     elif args.scope.lower() == 'base':
@@ -56,6 +71,9 @@ def get_arg_parser(subparser):
         g_parser.set_defaults(handler=handler)
         g_parser.add_argument('-b', '--base', help='search base. default is DC')
         g_parser.add_argument('-a', '--append', action='store_true', default=False, help='append base to DC')
-        g_parser.add_argument('-f', '--filter', required=True, help='search filter')
+        g_parser.add_argument('-f', '--filter', help='search filter')
         g_parser.add_argument('-s', '--scope', type=str.lower,  default='base', choices=['base', 'level', 'subtree'], help='search scope')
+        g_parser.add_argument('--allowed', action='store_true', help='retrieve allowed atrributes')
+        g_parser.add_argument('-e', '--examples', action='store_true', help='show examples')
+        g_parser.add_argument('attributes', default=[], nargs='*', help='attributes to retrieve')
     return g_parser
