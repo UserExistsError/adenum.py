@@ -31,9 +31,9 @@ if not args.domain:
     print('Error: must specify a domain')
     sys.exit()
 
-for addr in get_domain_controllers_by_dns(args.domain, args.name_server):
-    name = get_fqdn_by_addr(addr, args.name_server)
+for dc in get_domain_controllers_by_dns(args.domain, args.name_server):
+    name = get_fqdn_by_addr(dc['address'], args.name_server)
     if name:
-        print(addr, '\t', name)
+        print(dc['address'], '\t', name)
     else:
-        print(addr)
+        print(dc['address'])

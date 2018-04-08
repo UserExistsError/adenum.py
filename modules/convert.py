@@ -25,7 +25,9 @@ def ft_to_str(win):
     return ft_to_dt(win).strftime('%m/%d/%Y %I:%M:%S %p')
 
 def interval_to_minutes(i):
-    ''' convert interval values (100 ns intervals) to seconds '''
+    ''' convert interval/duration values (100 ns intervals) to seconds '''
+    if type(i) == str:
+        i = int(i)
     return int((-i / 10000000) / 60)
 
 def gt_to_dt(g):

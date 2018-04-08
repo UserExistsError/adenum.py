@@ -3,7 +3,6 @@ import io
 import logging
 import base64
 import tempfile
-from Crypto.Cipher import AES
 import xml.etree.ElementTree as ET
 
 from modules.adldap import *
@@ -44,6 +43,11 @@ def list_sysvol(conn, path, attrs=0, filt='*'):
 # ref: https://msdn.microsoft.com/en-us/library/cc422924.aspx
 AES_KEY=binascii.unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
 def extract_cpassword(data, folder):
+    try:
+        from Crypto.Cipher import AES
+    except:
+        logger.fatal('Failed to import pycrypto')
+        return
     r = ET.fromstring(data)
     creds = []
     parents = {c:p for p in r.iter() for c in p}

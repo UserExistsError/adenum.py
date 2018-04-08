@@ -26,14 +26,15 @@ private_addrs = (
 
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
     search_base = 'OU=Domain Controllers,'+search_base
-    conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.LEVEL, attributes=['dNSHostName'])
+    conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.LEVEL,
+                attributes=['dNSHostName', 'objectSid'])
     servers = []
     for s in conn.response:
         hostname = s['attributes']['dNSHostName'][0]
         addr = get_addr_by_host(hostname, name_server, timeout) or \
                get_addr_by_host(hostname, conn.server.host, timeout)
         if addr:
-            servers.append([addr, hostname])
+            servers.append({'address':addr, 'hostname':hostname, 'sid':s['attributes']['objectSid'][0]})
     return servers
 
 def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
@@ -63,7 +64,7 @@ def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
         hostname = str(a).split()[-1]
         addr = get_addr_by_host(hostname, name_server, timeout)
         if addr:
-            servers.append([addr, hostname])
+            servers.append({'address':addr, 'hostname':hostname})
     return servers
 
 

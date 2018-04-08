@@ -1,6 +1,7 @@
 import logging
 from modules.adldap import *
 from modules.convert import *
+from modules.password import *
 
 logger = logging.getLogger(__name__)
 
@@ -11,22 +12,19 @@ def get_parser():
     return g_parser
 
 def handler(args, conn):
+    print('= Default Domain Policy =')
     pol = get_default_pwd_policy(args, conn)
     if pol:
-        attrs = ['MinimumPasswordLength', 'PasswordComplexity', 'MinimumPasswordAge', 'MaximumPasswordAge',
-                 'PasswordHistorySize', 'LockoutBadCount', 'ResetLockoutCount', 'LockoutDuration',
-                 'RequireLogonToChangePassword', 'ForceLogoffWhenHourExpire', 'ClearTextPassword',
-                 'LSAAnonymousNameLookup']
-        print('-------- default domain policy --------')
-        for a in attrs:
-            if a in pol:
-                print('{:30s} {}'.format(a, pol[a]))
-        print('')
+        for k in pol:
+            print('{:30s} {}'.format(k, pol[k]))
+    else:
+        print('Failed to retrieve default domain password policy')
+    print('')
     # sort policies by precedence. precedence is used to determine which policy applies to a user
-    # whem multiple policies are applied to him/her
+    # when multiple policies are applied to him/her
     pols = sorted(get_pwd_policy(conn, args.search_base), key=lambda p:int(p['attributes']['msDS-PasswordSettingsPrecedence'][0]))
     for a in [p['attributes'] for p in pols]:
-        print('--------', a['name'][0], '--------')
+        print('=', a['name'][0].title(), '=')
         print('MinimumPasswordLength          ', a['msDS-MinimumPasswordLength'][0])
         print('ComplexityEnabled              ', a['msDS-PasswordComplexityEnabled'][0])
         print('MinimumPasswordAge             ', interval_to_minutes(int(a['msDS-MinimumPasswordAge'][0])) // 1440)

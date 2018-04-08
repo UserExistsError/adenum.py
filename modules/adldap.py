@@ -3,12 +3,8 @@ import ldap3
 import socket
 import logging
 import binascii
-import tempfile
 import subprocess
-import configparser
 
-from smb.SMBConnection import SMBConnection
-import smb.ntlm
 
 from modules.adldap import *
 from modules.convert import *
@@ -16,31 +12,29 @@ from modules.names import *
 
 logger = logging.getLogger(__name__)
 
+escape_trans = str.maketrans(
+    {'*': r'\2a',
+     '(': r'\28',
+     ')': r'\29',
+     '\\': r'\5c',
+     '\x00': r'\00',
+     '/': r'\2f'})
+
 def escape(s):
     ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
-    mapping = {'*': r'\2a',
-               '(': r'\28',
-               ')': r'\29',
-               '\\': r'\5c',
-               'NUL': r'\00',
-               '/': r'\2f'}
-    e = ''
-    for c in s:
-        e += mapping.get(c, c)
-    return e
-
-class MyMD4Class():
-    ''' class to add pass-the-hash support to pysmb '''
-    @staticmethod
-    def new():
-        return MyMD4Class()
-    def update(self, p):
-        self.nthash = binascii.unhexlify(p.decode('utf-16-le'))
-    def digest(self):
-        return self.nthash
+    return s.translate(escape_trans)
 
 def get_all(conn, search_base, simple_filter, attributes=[]):
-    ''' TODO this is broken '''
+    return get_all_wildcard(conn, search_base, simple_filter, attributes)
+
+def get_all_paged(conn, search_base, simple_filter, attributes=[]):
+    ''' Fetch all results with paging. Not all DCs support this '''
+    pass
+
+def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
+    ''' TODO this is broken
+    Fetch all results using wildcards in the CN
+    '''
     if '(cn' in simple_filter.lower():
         raise ValueError('search filter must not contain CN')
 
@@ -141,32 +135,6 @@ def get_users_in_group(conn, search_base, group):
     users += [u for u in conn.response if u.get('dn', False)]
     return users
 
-def get_pwd_policy(conn, search_base):
-    ''' return non-default password policies for the domain. user must have read access to
-    policies in "Password Settings Container" '''
-    base = 'cn=Password Settings Container,cn=System,'+search_base
-    # https://technet.microsoft.com/en-us/library/2007.12.securitywatch.aspx
-    attrs = [
-        'name',
-        'msDS-PasswordReversibleEncryptionEnabled', # default is false which is good
-        'msDS-PasswordHistoryLength',               # how many old pwds to remember
-        'msds-PasswordComplexityEnabled',           # require different character groups
-        'msDS-MinimumPasswordLength',
-        'msDS-MinimumPasswordAge', # used to prevent abuse of msDS-PasswordHistoryLength
-        'msDS-MaximumPasswordAge', # how long until password expires
-        'msDS-LockoutThreshold',   # login failures allowed within the window
-        'msDS-LockoutObservationWindow', # time window where failed auths are counted
-        'msDS-LockoutDuration', # how long to lock user account after too many failed auths
-        'msDS-PSOAppliesTo',    # dn's of affected users
-        'msDS-PasswordSettingsPrecedence', # used to assign precedence when a user is member of multiple policies
-    ]
-    # grab all objects directly under the search base
-    conn.search(base, '(objectCategory=*)', attributes=attrs, search_scope=ldap3.LEVEL)
-    response = []
-    for r in conn.response:
-        if not r['dn'].lower().startswith('cn=password settings container,'):
-            response.append(r)
-    return response
 
 def get_user_info(conn, search_base, user):
     user_dn = get_user_dn(conn, search_base, user)
@@ -220,41 +188,6 @@ def get_user_info(conn, search_base, user):
     attrs = [a for a in attributes if a.lower() in allowed]
     conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=attrs)
     return conn.response
-
-def get_default_pwd_policy(args, conn):
-    ''' ref https://msdn.microsoft.com/en-us/library/cc232769.aspx
-    default password policy is what gets returned by "net accounts"
-    The policy is stored as a GPO on the sysvol share. It's stored in an INI file.
-    The default policy is not returned by get_pwd_policy()
-    TODO: default policy may be stored somewhere else '''
-    if conn:
-        conn.search('cn=Policies,cn=System,'+args.search_base, '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
-                    attributes=['gPCFileSysPath'])
-        gpo_path = conn.response[0]['attributes']['gPCFileSysPath'][0]
-    else:
-        gpo_path = r'\\' + args.domain + r'\Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}\MACHINE'
-    logger.debug('GPOPath '+gpo_path)
-    sysvol, rel_path = gpo_path[2:].split('\\', 2)[-2:]
-    rel_path += r'\MACHINE\Microsoft\Windows NT\SecEdit\GptTmpl.inf'
-    tmp_file = tempfile.NamedTemporaryFile(prefix='GptTmpl_', suffix='.inf')
-    md4_tmp = smb.ntlm.MD4
-    if args.nthash:
-        smb.ntlm.MD4 = MyMD4Class.new
-    conn = SMBConnection(args.username, args.password, 'adenum', args.server, use_ntlm_v2=True,
-                         domain=args.domain, is_direct_tcp=(args.smb_port != 139))
-    logger.debug('connecting {}:{}'.format(args.server, args.smb_port))
-    conn.connect(args.server, port=args.smb_port)
-    smb.ntlm.MD4 = md4_tmp
-    attrs, size = conn.retrieveFile(sysvol, rel_path, tmp_file)
-    tmp_file.seek(0)
-    inf = tmp_file.read()
-    if inf[:2] == b'\xff\xfe':
-        inf = inf.decode('utf-16')
-    else:
-        inf = inf.decode()
-    config = configparser.ConfigParser(delimiters=('=', ':', ','))
-    config.read_string(inf)
-    return config['System Access']
 
 
 def get_dc_info(args, conn=None):

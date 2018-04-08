@@ -186,7 +186,7 @@ if __name__ == '__main__':
         # attempt to find a DC
         logger.info('Looking for domain controller for '+args.domain)
         try:
-            args.server = get_domain_controllers_by_dns(args.domain, args.name_server, args.timeout)[0][0]
+            args.server = get_domain_controllers_by_dns(args.domain, args.name_server, args.timeout)[0]['address']
         except IndexError:
             print('Error: Failed to find a domain controller')
             sys.exit()
