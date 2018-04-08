@@ -3,7 +3,7 @@ import logging
 import dns.resolver
 
 logger = logging.getLogger(__name__)
-TIMEOUT = 2
+from modules.config import TIMEOUT
 
 def get_resolver(name_server=None, timeout=TIMEOUT):
     if name_server:

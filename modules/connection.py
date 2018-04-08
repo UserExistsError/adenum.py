@@ -5,7 +5,7 @@ import logging
 import hashlib
 import getpass
 
-from modules.config import *
+from modules.config import TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +18,11 @@ class CachingConnection(ldap3.Connection):
         self.timeout = kwargs.get('timeout', TIMEOUT)
         del kwargs['timeout']
         ldap3.Connection.__init__(self, *args, **kwargs)
+
     def search(self, search_base, search_filter, search_scope=ldap3.SUBTREE, **kwargs):
         if 'attributes' not in kwargs:
             kwargs['attributes'] = []
         kwargs['time_limit'] = self.timeout
-        #kwargs['paged_size'] = 1000
-        #kwargs['paged_criticality'] = True
 
         sha1 = hashlib.new('sha1', b''.join(
             str(a).lower().encode() for a in [search_base, search_filter]+list(kwargs.values()))).digest()
@@ -34,23 +33,27 @@ class CachingConnection(ldap3.Connection):
             return
         logger.debug('SEARCH ({}) {} {}'.format(search_base, search_filter, search_scope))
         response = []
-        super().search(
-            search_base,
-            search_filter,
-            search_scope,
-            **kwargs
-        )
-        # return only the results
-        for obj in self.response:
-            if obj['type'].lower() == 'searchresentry':
-                for a in [a for a in obj['attributes'] if a.startswith('member;range=')]:
-                    del obj['attributes'][a]
-                response.append(obj)
-        # try:
-        #     cookie = self.result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
-        # except KeyError:
-        #     break
-        # kwargs['paged_cookie'] = cookie
+
+        kwargs['paged_criticality'] = True
+
+        while True:
+            super().search(search_base, search_filter, search_scope, **kwargs)
+            # return only the results
+            for obj in self.response:
+                if obj['type'].lower() == 'searchresentry':
+                    for a in [a for a in obj['attributes'] if a.startswith('member;range=')]:
+                        del obj['attributes'][a]
+                    response.append(obj)
+
+            # break if not doing paged search
+            if 'paged_size' not in kwargs:
+                break
+
+            cookie = self.result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
+            if not cookie:
+                # b'' -> last page
+                break
+            kwargs['paged_cookie'] = cookie
 
         self.response = response
         logger.debug('RESULT {} {}'.format(len(self.response), str(self.result)))
@@ -58,9 +61,7 @@ class CachingConnection(ldap3.Connection):
 
         if self.result['result'] == 4:
             logger.warn('Max results reached: '+str(len(self.response)))
-        #     kwargs['attributes'].append('range=1000-*')
-        #     self.response += self.search(search_base, search_filter, search_scope=ldap3.SUBTREE, **kwargs)
-        #     return self.response
+
 
 def get_connection(args, addr=None):
     username = None
@@ -87,7 +88,6 @@ def get_connection(args, addr=None):
     conn = CachingConnection(server, user=username, password=password, authentication=auth,
                              version=args.version, read_only=True, auto_range=True,
                              auto_bind=False, receive_timeout=args.timeout, timeout=args.timeout)
-
     conn.open()
     if args.starttls:
         conn.start_tls()

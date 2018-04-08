@@ -5,13 +5,14 @@ import logging
 import binascii
 import subprocess
 
-
 from modules.adldap import *
 from modules.convert import *
 from modules.names import *
+from modules.config import MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
+# chars to escape for Active Directory
 escape_trans = str.maketrans(
     {'*': r'\2a',
      '(': r'\28',
@@ -25,11 +26,13 @@ def escape(s):
     return s.translate(escape_trans)
 
 def get_all(conn, search_base, simple_filter, attributes=[]):
-    return get_all_wildcard(conn, search_base, simple_filter, attributes)
+    # TODO determine if dc supports paging
+    return get_all_paged(conn, search_base, simple_filter, attributes)
 
 def get_all_paged(conn, search_base, simple_filter, attributes=[]):
     ''' Fetch all results with paging. Not all DCs support this '''
-    pass
+    conn.search(search_base, simple_filter, attributes=attributes, paged_size=MAX_PAGE_SIZE)
+    return conn.response
 
 def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
     ''' TODO this is broken
@@ -80,7 +83,8 @@ def get_groups(conn, search_base):
     return [g for g in results if g.get('dn', None)]
 
 # ms-Mcs-AdmPwd (LAPS password). see also post/windows/gather/credentials/enum_laps
-# mcs-AdmPwdExpirationTime can be used to determine if LAPS is in use from any authenticated user. ref https://adsecurity.org/?p=3164
+# mcs-AdmPwdExpirationTime can be used to determine if LAPS is in use from any authenticated user.
+# ref https://adsecurity.org/?p=3164
 COMPUTER_ATTRIBUTES=['name', 'dNSHostName', 'whenCreated', 'operatingSystem',
                      'operatingSystemServicePack', 'lastLogon', 'logonCount',
                      'operatingSystemHotfix', 'operatingSystemVersion',

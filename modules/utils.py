@@ -15,7 +15,6 @@ from modules.convert import *
 
 
 logger = logging.getLogger(__name__)
-TIMEOUT = 2
 
 private_addrs = (
     [2130706432, 4278190080], # 127.0.0.0,   255.0.0.0
