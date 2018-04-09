@@ -5,8 +5,8 @@ import base64
 import tempfile
 import xml.etree.ElementTree as ET
 
-from modules.adldap import *
-from modules.convert import *
+from lib.adldap import *
+from lib.convert import *
 from smb.SMBConnection import SMBConnection
 from smb.smb_constants import *
 
@@ -43,11 +43,7 @@ def list_sysvol(conn, path, attrs=0, filt='*'):
 # ref: https://msdn.microsoft.com/en-us/library/cc422924.aspx
 AES_KEY=binascii.unhexlify('4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b')
 def extract_cpassword(data, folder):
-    try:
-        from Crypto.Cipher import AES
-    except:
-        logger.fatal('Failed to import pycrypto')
-        return
+    from Crypto.Cipher import AES
     r = ET.fromstring(data)
     creds = []
     parents = {c:p for p in r.iter() for c in p}
@@ -76,7 +72,7 @@ def extract_cpassword(data, folder):
     return creds
 
 def handler(args, conn):
-    ''' look for sysvol\domain\policies\{GUID}\*\Preferences\{groups,scheduledtasks}\*.xml '''
+    ''' look for files sysvol\domain\policies\{GUID}\*\Preferences\*\*.xml containing "cpassword" '''
     dc_hostname = args.hostname or args.server
     conn = SMBConnection(args.username, args.password, 'adenum', dc_hostname, use_ntlm_v2=True,
                          domain=args.domain, is_direct_tcp=(args.smb_port != 139))

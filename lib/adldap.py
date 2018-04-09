@@ -5,10 +5,10 @@ import logging
 import binascii
 import subprocess
 
-from modules.adldap import *
-from modules.convert import *
-from modules.names import *
-from modules.config import MAX_PAGE_SIZE
+from lib.adldap import *
+from lib.convert import *
+from lib.names import *
+from lib.config import MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,61 @@ escape_trans = str.maketrans(
      '\\': r'\5c',
      '\x00': r'\00',
      '/': r'\2f'})
+
+# ms-Mcs-AdmPwd (LAPS password). see also post/windows/gather/credentials/enum_laps
+# mcs-AdmPwdExpirationTime can be used to determine if LAPS is in use from any authenticated user.
+# ref https://adsecurity.org/?p=3164
+COMPUTER_ATTRIBUTES=['name', 'dNSHostName', 'whenCreated', 'operatingSystem',
+                     'operatingSystemServicePack', 'lastLogon', 'logonCount',
+                     'operatingSystemHotfix', 'operatingSystemVersion',
+                     'location', 'managedBy', 'description', 'ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime']
+
+USER_ATTRIBUTES=[
+        #'msexchhomeservername',
+        #'usncreated',
+        'whenCreated',
+        'whenChanged',
+        'memberOf',
+        'groupMembershipSAM',
+        'accountExpires',
+        'msDS-UserPasswordExpiryTimeComputed',
+        'displayName',
+        'primaryGroupID',
+        #'homeDirectory',
+        'lastLogonTimestamp',
+        'lastLogon',
+        'lastLogoff',
+        'logonWorkstation',
+        'otherLoginWorkstations',
+        'scriptPath',
+        'userWorkstations',
+        'displayName',
+        'mail',
+        'title',
+        'samaccountname',
+        'lockouttime',
+        'lockoutduration',
+        'description',
+        'pwdlastset',
+        'logoncount',
+        'logonHours',
+        'name',
+        #'usnchanged',
+        #'allowedAttributes',
+        #'admincount',
+        'badpasswordtime',
+        'badPwdCount',
+        'info',
+        'distinguishedname',
+        'userPrincipalName',
+        'givenname',
+        'middleName',
+        'lastlogontimestamp',
+        'useraccountcontrol',
+        'objectGUID',
+        'objectSid',
+    ]
+
 
 def escape(s):
     ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
@@ -69,9 +124,13 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
             r = cs[-1]
     return results
 
-def get_users(conn, search_base):
+
+def get_users(conn, search_base, basic=False):
     ''' get all domain users '''
-    return get_all(conn, search_base, '(objectCategory=user)', ['userPrincipalName', 'samAccountName', 'objectSid'])
+    attrs = USER_ATTRIBUTES
+    if basic:
+        attrs = ['userPrincipalName', 'samAccountName', 'objectSid', 'distinguishedName']
+    return get_all(conn, search_base, '(objectCategory=user)', attrs)
 
 def get_groups(conn, search_base):
     ''' get all domain groups '''
@@ -82,21 +141,19 @@ def get_groups(conn, search_base):
     results = get_all(conn, search_base, '(objectCategory=group)', ['objectSid', 'groupType'])
     return [g for g in results if g.get('dn', None)]
 
-# ms-Mcs-AdmPwd (LAPS password). see also post/windows/gather/credentials/enum_laps
-# mcs-AdmPwdExpirationTime can be used to determine if LAPS is in use from any authenticated user.
-# ref https://adsecurity.org/?p=3164
-COMPUTER_ATTRIBUTES=['name', 'dNSHostName', 'whenCreated', 'operatingSystem',
-                     'operatingSystemServicePack', 'lastLogon', 'logonCount',
-                     'operatingSystemHotfix', 'operatingSystemVersion',
-                     'location', 'managedBy', 'description', 'ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime']
 
-def get_computer(conn, search_base, cn, attributes=[]):
+def get_computer(conn, search_base, hostname, attributes=[]):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
-    conn.search(search_base, '(&(objectCategory=computer)(cn={}))'.format(cn), attributes=attributes)
+    if '.' in hostname:
+        conn.search(search_base, '(&(objectCategory=computer)(dNSHostname={}))'.format(hostname), attributes=attributes)
+    else:
+        conn.search(search_base, '(&(objectCategory=computer)(cn={}))'.format(hostname), attributes=attributes)
     return conn.response[0]
 
-def get_computers(conn, search_base, attributes=[]):
+def get_computers(conn, search_base, attributes=[], basic=False):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
+    if basic:
+        attributes = ['dNSHostName', 'distinguishedName']
     results = get_all(conn, search_base, '(objectCategory=computer)', attributes)
     return [g for g in results if g.get('dn', None)]
 
@@ -144,52 +201,7 @@ def get_user_info(conn, search_base, user):
     user_dn = get_user_dn(conn, search_base, user)
     conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=['allowedAttributes'])
     allowed = set([a.lower() for a in conn.response[0]['attributes']['allowedAttributes']])
-    attributes = [
-        #'msexchhomeservername',
-        #'usncreated',
-        'whenCreated',
-        'whenChanged',
-        'memberOf',
-        'groupMembershipSAM',
-        'accountExpires',
-        'msDS-UserPasswordExpiryTimeComputed',
-        'displayName',
-        'primaryGroupID',
-        #'homeDirectory',
-        'lastLogonTimestamp',
-        'lastLogon',
-        'lastLogoff',
-        'logonWorkstation',
-        'otherLoginWorkstations',
-        'scriptPath',
-        'userWorkstations',
-        'displayName',
-        'mail',
-        'title',
-        'samaccountname',
-        'lockouttime',
-        'lockoutduration',
-        'description',
-        'pwdlastset',
-        'logoncount',
-        'logonHours',
-        'name',
-        #'usnchanged',
-        #'allowedAttributes',
-        #'admincount',
-        'badpasswordtime',
-        'badPwdCount',
-        'info',
-        'distinguishedname',
-        'userPrincipalName',
-        'givenname',
-        'middleName',
-        'lastlogontimestamp',
-        'useraccountcontrol',
-        'objectGUID',
-        'objectSid',
-    ]
-    attrs = [a for a in attributes if a.lower() in allowed]
+    attrs = [a for a in USER_ATTRIBUTES if a.lower() in allowed]
     conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=attrs)
     return conn.response
 

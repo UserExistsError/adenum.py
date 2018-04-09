@@ -1,6 +1,6 @@
 import logging
-from modules.adldap import *
-from modules.convert import *
+from lib.adldap import *
+from lib.convert import *
 
 logger = logging.getLogger(__name__)
 

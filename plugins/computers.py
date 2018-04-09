@@ -3,10 +3,10 @@ import sys
 import logging
 import concurrent.futures
 
-from modules.adldap import *
-from modules.convert import *
-from modules.names import *
-from modules.utils import *
+from lib.adldap import *
+from lib.convert import *
+from lib.names import *
+from lib.utils import *
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def computer_info(computer, args):
     ''' runs as a thread to resolve and find uptime of the host '''
     hostname = computer['attributes']['dNSHostName'][0]
     info = ''
-    if args.resolve or args.uptime or args.alive:
+    if args.resolve or args.smbinfo or args.alive:
         for name_server in set([args.name_server, args.server, None]):
             addr = get_addr_by_host(hostname, name_server, args.timeout)
             if addr:
@@ -32,7 +32,7 @@ def computer_info(computer, args):
                 logger.debug('Host '+addr+' is down')
                 return
             info = 'Address: {}\n'.format(addr)
-            if args.uptime:
+            if args.smbinfo:
                 smbinfo = get_smb_info(addr, args.timeout, args.smb_port)
                 if smbinfo:
                     for k in sorted(smbinfo.keys()):
@@ -53,9 +53,13 @@ def computer_info(computer, args):
         sys.stdout.write('cn: '+cn(computer['dn']) + os.linesep + info + os.linesep)
 
 def handler(args, conn):
-    computers = get_computers(conn, args.search_base, args.attributes)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as e:
-        concurrent.futures.wait([e.submit(computer_info, c, args) for c in computers])
+    computers = get_computers(conn, args.search_base, args.attributes, args.basic)
+    if args.basic:
+        for c in computers:
+            print(c['attributes']['dNSHostName'][0], c['attributes']['distinguishedName'][0])
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as e:
+            concurrent.futures.wait([e.submit(computer_info, c, args) for c in computers])
 
 def get_arg_parser(subparser):
     global g_parser
@@ -63,9 +67,10 @@ def get_arg_parser(subparser):
         g_parser = subparser.add_parser(PLUGIN_NAME, help='list computers')
         g_parser.set_defaults(handler=handler)
         g_parser.set_defaults(computers=[])
-        g_parser.add_argument('-u', '--uptime', action='store_true', help='get uptime via SMB2')
+        g_parser.add_argument('-s', '--smbinfo', action='store_true', help='run smbinfo on each host')
         g_parser.add_argument('-r', '--resolve', action='store_true', help='resolve hostnames')
         g_parser.add_argument('-a', '--attributes', default=[], type=lambda x:x.split(','),
                               help='additional attributes to retrieve')
         g_parser.add_argument('--alive', action='store_true', help='only show alive hosts')
+        g_parser.add_argument('--basic', action='store_true', help='get basic computer info')
     return g_parser

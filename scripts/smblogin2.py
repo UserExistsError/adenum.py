@@ -35,7 +35,7 @@ def login(host, args):
     try:
         if args.nthash:
             smbconn.login(args.username, '', nthash=args.password, domain=args.domain)
-        elif args.nthash:
+        elif args.lmhash:
             smbconn.login(args.username, '', lmhash=args.password, domain=args.domain)
         else:
             smbconn.login(args.username, args.password, domain=args.domain)
@@ -46,7 +46,7 @@ def login(host, args):
         status = 'LoginError'
         if error_code == STATUS_LOGON_FAILURE:
             status = 'Failure'
-            if args.domain != '.':
+            if args.domain != '.' and smbconn.getServerDomain() != '':
                 raise RuntimeError('Aborting: domain creds are invalid, preventing lockout')
         sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, status))
         return
@@ -69,11 +69,11 @@ def login(host, args):
             # ADMIN$ doesn't exist, probably Samba
             status = 'ShareNameError'
 
+    sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, status))
     try:
         smbconn.logoff()
     except:
         pass
-    sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, status))
 
 def auth_thread(param):
     host, args = param

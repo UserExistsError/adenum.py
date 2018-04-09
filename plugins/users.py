@@ -1,6 +1,7 @@
 import logging
-from modules.adldap import *
-from modules.convert import *
+from lib.adldap import *
+from lib.convert import *
+from plugins.user import print_user
 
 logger = logging.getLogger(__name__)
 
@@ -33,25 +34,28 @@ def handler(args, conn):
             print()
             # get accounts that can replicate the DC
     else:
-        users = get_users(conn, args.search_base)
+        users = get_users(conn, args.search_base, args.basic)
         for u in users:
-            if 'dn' in u:
-                if args.dn:
-                    print(u['dn'])
-                else:
-                    sid = ''
-                    try:
-                        sid = sid_to_str(u['attributes']['objectSid'][0])
-                    except:
-                        pass
-                    try:
-                        print('{} {}'.format(u['attributes']['userPrincipalName'][0].split('@')[0], sid))
-                        #print(u['attributes']['userPrincipalName'][0])
-                    except:
-                        name = u['attributes'].get('samAccountName', None)
-                        if not name:
-                            name = u['dn']
-                        print('{} {}'.format(name, sid))
+            if args.basic:
+                if 'dn' in u:
+                    if args.dn:
+                        print(u['dn'])
+                    else:
+                        sid = ''
+                        try:
+                            sid = sid_to_str(u['attributes']['objectSid'][0])
+                        except:
+                            pass
+                        try:
+                            print('{} {}'.format(u['attributes']['userPrincipalName'][0].split('@')[0], sid))
+                            #print(u['attributes']['userPrincipalName'][0])
+                        except:
+                            name = u['attributes'].get('samAccountName', None)
+                            if not name:
+                                name = u['dn']
+                            print('{} {}'.format(name, sid))
+            else:
+                print_user(u, conn, args)
 
 def get_parser():
     return g_parser
@@ -62,4 +66,5 @@ def get_arg_parser(subparser):
         g_parser = subparser.add_parser(PLUGIN_NAME, help='list all users')
         g_parser.set_defaults(handler=handler)
         g_parser.add_argument('-p', '--privileged', action='store_true', help='list privileged users')
+        g_parser.add_argument('--basic', action='store_true', help='get basic user info')
     return g_parser

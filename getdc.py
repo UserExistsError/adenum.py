@@ -3,23 +3,24 @@ import sys
 import argparse
 import logging
 import adenum
-from modules.utils import get_domain_controllers_by_dns
-from modules.names import get_fqdn_by_addr
+from lib.utils import get_domain_controllers_by_dns
+from lib.names import get_fqdn_by_addr
 
 logger = logging.getLogger(adenum.__name__)
-
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--domain', help='domain')
 parser.add_argument('--debug', action='store_true', help='enable debug output')
 parser.add_argument('-n', '--name-server', dest='name_server', help='name server')
 args = parser.parse_args()
+
 if args.debug:
-    logger.setLevel(logging.DEBUG)
     h = logging.StreamHandler()
-    h.setFormatter(logging.Formatter('[%(levelname)s]:%(lineno)s %(message)s'))
-    logger.addHandler(h)
+    h.setFormatter(logging.Formatter('[%(levelname)s] %(filename)s:%(lineno)s %(message)s'))
+    for n in [__name__, 'plugins', 'lib']:
+        l = logging.getLogger(n)
+        l.setLevel(logging.DEBUG)
+        l.addHandler(h)
 
 if not args.domain:
     if args.name_server:
@@ -32,8 +33,4 @@ if not args.domain:
     sys.exit()
 
 for dc in get_domain_controllers_by_dns(args.domain, args.name_server):
-    name = get_fqdn_by_addr(dc['address'], args.name_server)
-    if name:
-        print(dc['address'], '\t', name)
-    else:
-        print(dc['address'])
+    print(dc['address'], '\t', dc['hostname'])

@@ -1,4 +1,4 @@
-from modules.convert import *
+from lib.convert import *
 
 PLUGIN_NAME='trust'
 g_parser = None

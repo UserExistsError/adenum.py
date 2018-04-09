@@ -8,10 +8,10 @@ import binascii
 import datetime
 import subprocess
 
-from modules.utils import *
-from modules.names import *
-from modules.config import *
-from modules.convert import *
+from lib.utils import *
+from lib.names import *
+from lib.config import *
+from lib.convert import *
 
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,8 @@ def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
         addr = get_host_by_name(domain)
         if addr:
             answer = [addr]
+        else:
+            answer = []
     servers = []
     for a in answer:
         hostname = str(a).split()[-1]
@@ -112,7 +114,6 @@ def parse_target_info(ti, info):
         return
     t, l = struct.unpack('<HH', ti[:4])
     v = ti[4:4+l]
-    logger.debug('TargetInfoType '+hex(t))
     if t == 0x1:
         info['netbios_name'] = v.decode('utf-16-le')
     elif t == 0x2:
@@ -164,6 +165,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
 
     # send SMB1 NegotiateProtocolRequest with SMB2 dialects. should lead to SMB2
     # negotiation even if SMB1 is disabled.
+    logger.debug('{}:{} Sending SMB1 NegotiateProtocolRequest with SMB2 dialects'.format(addr, port))
     s.send(binascii.unhexlify(
         b'000000d4ff534d4272000000001843c80000000000000000000000000000'
         b'feff0000000000b100025043204e4554574f524b2050524f4752414d2031'
@@ -182,6 +184,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
     smb1_signing = None
     smb2_signing = None
     if data[4] == 0xff:
+        logger.debug('{}:{} Failed to elicit SMB2 negotiation. Target is SMB1 only'.format(addr, port))
         smb1_signing = data[39]
         # SMB1 dialects sent in the first packet above, in the same order.
         dialects = ['PC NETWORK PROGRAM 1.0', 'MICROSOFT NETWORKS 1.03', 'MICROSOFT NETWORKS 3.0',
@@ -189,6 +192,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
                     'NT LM 0.12']
         info['smbNegotiated'] = dialects[struct.unpack('<H', data[37:39])[0]]
         # SessionSetup AndX Request
+        logger.debug('{}:{} Sending SMB1 SessionSetup AndX Request'.format(addr, port))
         s.send(binascii.unhexlify(
             b'0000009cff534d4273000000001843c8000000000000000000000000ffff'
             b'976e000001000cff000000ffff02000100000000004a000000000054c000'
@@ -199,20 +203,23 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
             
         ))
         data = s.recv(4096)
+        logger.debug('{}:{} Received SMB1 SessionSetup AndX Response'.format(addr, port))
         ntlmssp = data[data.find(b'NTLMSSP\x00\x02\x00\x00\x00'):]
     else:
         info['smbVersions'].add(2)
         smb2_signing = data[70]
         dialect = struct.unpack('<H', data[0x48:0x4a])[0]
+        logger.debug('{}:{} Received SMB2 negotiation response: 0x{:x}'.format(addr, port, dialect))
         boot_dt = datetime.datetime.fromtimestamp((struct.unpack('<Q', data[0x74:0x7c])[0] / 10000000) - 11644473600)
         system_dt = datetime.datetime.fromtimestamp((struct.unpack('<Q', data[0x6c:0x74])[0] / 10000000) - 11644473600)
         up_td = system_dt - boot_dt
         boot_dt = datetime.datetime.now() - up_td
         info['uptime'] = str(up_td) + ' (booted '+ boot_dt.strftime('%H:%M:%S %d %b %Y')+')'
         info['date'] = system_dt.strftime('%H:%M:%S %d %b %Y')
-        msgid = 1
+        msgid = 1               # message id must be incremented each request
         if dialect == 0x2ff:
             # send SMB2 NegotiateProtocolRequest with random client GUID and salt
+            logger.debug('{}:{} Sending SMB2 NegotiateProtocolRequest'.format(addr, port))
             s.send(binascii.unhexlify(
                 b'000000b6fe534d4240000000000000000000000000000000000000000100'
                 b'000000000000000000000000000000000000000000000000000000000000'
@@ -224,12 +231,13 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
             )
             data = s.recv(4096)
             dialect = struct.unpack('<H', data[0x48:0x4a])[0]
+            logger.debug('{}:{} Received SMB2 NegotiateProtocolResponse: 0x{:x}'.format(addr, port, dialect))
             msgid += 1
             if dialect >= 0x300:
                 info['smbVersions'].add(3)
         info['smbNegotiated'] = hex(dialect)
-        logger.debug('MaxSMBVersion: '+hex(dialect))
         # send SMB2 SessionSetupRequest
+        logger.debug('{}:{} Sending SMB2 SessionSetupRequest'.format(addr, port))
         s.send(binascii.unhexlify(
             b'000000a2fe534d424000010000000000010000200000000000000000') + struct.pack('<Q', msgid) + \
             binascii.unhexlify(
@@ -241,12 +249,14 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         ))
         data = s.recv(4096)
         ntlmssp = data[data.find(b'NTLMSSP\x00\x02\x00\x00\x00'):]
+        logger.debug('{}:{} Received SMB2 SessionSetupResponse with NTLMSSP info'.format(addr, port))
         s.shutdown(socket.SHUT_RDWR)
 
         # send SMB1 NegotiateProtocolRequest with SMB1 only dialects to fingerprint SMB1.
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         s.connect((addr, port))
+        logger.debug('{}:{} Sending SMB1 NegotiateProtocolRequest with SMB1 only dialects'.format(addr, port))
         s.send(binascii.unhexlify(
             b'000000beff534d4272000000001843c80000000000000000000000000000'
             b'feff00000000009b00025043204e4554574f524b2050524f4752414d2031'
@@ -261,10 +271,12 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
             smb1_signing = data[39]
         except (ConnectionResetError, IndexError):
             # SMB1 likely not supported
+            logger.debug('{}:{} Failed to receive SMB1 NegotiateProtocolResponse. SMB1 not supported'.format(addr, port))
             s = None
 
     if s:
         # SMB1 SessionSetup with random PID
+        logger.debug('{}:{} Sending SMB1 SessionSetup request'.format(addr, port))
         s.send(
             binascii.unhexlify(
                 b'0000009cff534d4273000000001843c800004253525350594c200000ffff') + \
@@ -277,6 +289,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
                 b'6d00620061000000')
         )
         data = s.recv(4096)
+        logger.debug('{}:{} Received SMB1 SessionSetup response. Parsing native strings'.format(addr, port))
         native_offset = 47 + struct.unpack('<H', data[43:45])[0]
         # align to 16 bits
         native_offset += native_offset % 2
@@ -296,7 +309,6 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
     ti_len = struct.unpack('<H', ntlmssp[40:42])[0]
     ti_offset = struct.unpack('<L', ntlmssp[44:48])[0]
     ti = ntlmssp[ti_offset:ti_offset+ti_len]
-    logger.debug('TargetInfo-length '+str(ti_len))
     parse_target_info(ti, info)
     info['smbVersions'] = ', '.join(map(str, info['smbVersions']))
     # ref: https://blogs.technet.microsoft.com/josebda/2010/12/01/the-basics-of-smb-signing-covering-both-smb1-and-smb2/

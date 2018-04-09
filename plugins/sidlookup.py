@@ -1,6 +1,6 @@
 import logging
-from modules.adldap import *
-from modules.convert import *
+from lib.adldap import *
+from lib.convert import *
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +12,8 @@ def handler(args, conn):
     for s in args.sids:
         sid_hex = sid_to_ldap(str_to_sid(s))
         sidstr += '(objectSid={})'.format(sid_hex)
-    conn.search(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn'])
+    conn.search(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn', 'objectCategory'])
     for r in conn.response:
-        print(r)
         a = r['attributes']
         if args.dn:
             name = r['dn']
@@ -23,8 +22,9 @@ def handler(args, conn):
         elif len(a['userPrincipalName']):
             name = a['userPrincipalName'][0]
         else:
-            name = r['attributes']['cn'][0]
-        print(name, sid_to_str(r['attributes']['objectSid'][0]))
+            name = a['cn'][0]
+        cat = a['objectCategory'][0][3:].split(',')[0]
+        print(name, cat, sid_to_str(r['attributes']['objectSid'][0]))
 
 def get_parser():
     return g_parser

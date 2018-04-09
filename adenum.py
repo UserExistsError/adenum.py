@@ -12,12 +12,12 @@ import dns.query
 
 # local modules
 import plugins
-from modules.utils import *
-from modules.names import *
-from modules.adldap import *
-from modules.config import *
-from modules.convert import *
-from modules.connection import *
+from lib.utils import *
+from lib.names import *
+from lib.adldap import *
+from lib.config import *
+from lib.convert import *
+from lib.connection import *
 
 DESCRIPTION = 'Enumerate ActiveDirectory users, groups, computers, and password policies'
 
@@ -60,7 +60,8 @@ List domain joined computers. Add -r and -u to resolve hostnames and get uptime 
     python3 adenum.py -u USER -P -d mydomain.local computers
 
 = TODO =
-Find a better workaround for AD 1000 results limit.
+1. Find a better workaround for AD 1000 results limit on DCs that don't support paging
+2. Prioritize name resolution methods that work
 
 = RESOURCES =
 
@@ -80,7 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--server', help='domain controller address or name')
     parser.add_argument('-d', '--domain', help='user domain. may be different than domain of --server (trusts)')
     parser.add_argument('--timeout', type=int, default=TIMEOUT, help='timeout for network operations')
-    parser.add_argument('--threads', type=int, default=20, help='name resolution/uptime worker count')
+    parser.add_argument('--threads', type=int, default=20, help='name resolution/smbinfo worker count. default 20')
     parser.add_argument('--port', type=int, help='default 389 or 636 with --tls. 3268 for global catalog')
     parser.add_argument('--smb-port', dest='smb_port', default=445, type=int, help='default 445')
     parser.add_argument('--smbclient', action='store_true', help='force use of smbclient over pysmb')
@@ -110,14 +111,14 @@ if __name__ == '__main__':
     if args.debug:
         h = logging.StreamHandler()
         h.setFormatter(logging.Formatter('[%(levelname)s] %(filename)s:%(lineno)s %(message)s'))
-        for n in [__name__, 'plugins', 'modules']:
+        for n in [__name__, 'plugins', 'lib']:
             l = logging.getLogger(n)
             l.setLevel(logging.DEBUG)
             l.addHandler(h)
     elif args.verbose:
         h = logging.StreamHandler()
         h.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-        for n in [__name__, 'plugins', 'modules']:
+        for n in [__name__, 'plugins', 'lib']:
             l = logging.getLogger(n)
             l.setLevel(logging.INFO)
             l.addHandler(h)
@@ -187,7 +188,7 @@ if __name__ == '__main__':
         logger.info('Looking for domain controller for '+args.domain)
         try:
             args.server = get_domain_controllers_by_dns(args.domain, args.name_server, args.timeout)[0]['address']
-        except IndexError:
+        except:
             print('Error: Failed to find a domain controller')
             sys.exit()
         logger.info('Found a domain controller for {} at {}'.format(args.domain, args.server))

@@ -35,9 +35,9 @@ $ python3 adenum.py -u USER -P -d mydomain.local group "domain admins"
 ```
 
 ### List domain joined computers.
-Add -r and -u to resolve hostnames and get uptime (SMB2 only).
+Add -r and -s to resolve hostnames and run smbinfo. Use --alive to report active hosts only
 ```
-$ python3 adenum.py -u USER -P -d mydomain.local computers -r -u
+$ python3 adenum.py -u USER -P -d mydomain.local computers -r -s
 ```
 
 ## Resources
@@ -47,28 +47,16 @@ https://msdn.microsoft.com/en-us/library/ms675090(v=vs.85).aspx
 ```
 
 ## Additional Scripts
-Additional scripts are included that provide a subset of adenum's capabilities.
+Scripts that provide a subset of adenum's capabilities.
 
 ### smbinfo.py
 Probes targets for SMB versions, uptime, and build information. Accepts nmap XML files.
 ```
-$ python3 smbinfo.py IP1 IP2 .. IPN
+$ python3 smbinfo.py -a [HOST1 [..HOSTN]] [-f HOSTFILE] [-x nmap-445.xml]
 ```
 
 ### getdc.py
 List domain controllers for provided domain.
 ```
 $ python3 getdc.py -d mydomain.local
-```
-
-### smblogin2.py
-Uses impacket to login to hosts with given creds and checks for admin access via the ADMIN$ share.
-```
-$ python2 smblogin2.py -u USERNAME -p PASSWORD HOST1 [..HOSTN]
-```
-
-### active_users.py
-Enumerate active users on given hosts using MSRPC over SMB. The Win32 API is NetWkstaUserEnum.
-```
-$ python2 active_users.py -u USERNAME -p PASSWORD HOST1 [..HOSTN]
 ```

@@ -1,5 +1,5 @@
-from modules.adldap import *
-from modules.convert import *
+from lib.adldap import *
+from lib.convert import *
 
 PLUGIN_NAME='groups'
 g_parser = None

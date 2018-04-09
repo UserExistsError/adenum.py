@@ -5,7 +5,7 @@ import logging
 import hashlib
 import getpass
 
-from modules.config import TIMEOUT
+from lib.config import TIMEOUT
 
 logger = logging.getLogger(__name__)
 

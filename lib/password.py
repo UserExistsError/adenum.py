@@ -4,7 +4,7 @@ import tempfile
 import collections
 import configparser
 
-from modules.convert import *
+from lib.convert import *
 
 logger = logging.getLogger(__name__)
 

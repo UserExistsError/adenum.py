@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 
-from modules.adldap import *
+from lib.adldap import *
 
 '''
 enumerate hosts configured with "Local Administrator Password Solution" (LAPS)
@@ -17,7 +17,7 @@ PLUGIN_NAME='laps'
 PLUGIN_INFO='''
 Enumerate hosts configured with LAPS. LAPS stores local admin passwords in plaintext in the ms-Mcs-AdmPwd
 attribute. This is typically readable only by privileged accounts. The mcs-AdmPwdExpirationTime can be
-read by authenticated users and indicates whether a hosts used LAPS or not.
+read by authenticated users and indicates whether a host uses LAPS or not.
 '''
 g_parser = None
 
@@ -27,16 +27,19 @@ def get_parser():
 def handler(args, conn):
     computers = get_computers(conn, args.search_base, attributes=['ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime', 'dNSHostName'])
     for c in computers:
-        info = 'dNSHostName: {}\n'.format(c['attributes']['dNSHostName'])
-        if 'ms-Mcs-AdmPwd' in c['attributes']:
-            info += 'ms-Mcs-AdmPwd: {}\n'.format(c['attributes']['ms-Mcs-AdmPwd'])
-        if 'mcs-AdmPwdExpirationTime' in c['attributes']:
-            info += 'mcs-AdmPwdExpirationTime: {}\n'.format(c['attributes']['mcs-AdmPwdExpirationTime'])
+        info = 'dNSHostName: {}\n'.format(c['attributes']['dNSHostName'][0])
+        if len(c['attributes']['ms-Mcs-AdmPwd']):
+            info += 'ms-Mcs-AdmPwd: {}\n'.format(c['attributes']['ms-Mcs-AdmPwd'][0])
+        else:
+            info += 'ms-Mcs-AdmPwd\n'
+        if len(c['attributes']['mcs-AdmPwdExpirationTime']):
+            info += 'mcs-AdmPwdExpirationTime: {}\n'.format(c['attributes']['mcs-AdmPwdExpirationTime'][0])
+        else:
+            info += 'mcs-AdmPwdExpirationTime:\n'
         if args.dn:
             sys.stdout.write('dn: '+c['dn'] + os.linesep + info + os.linesep)
         else:
             sys.stdout.write('cn: '+cn(c['dn']) + os.linesep + info + os.linesep)
-        print(info + os.linesep)
 
 
 def get_arg_parser(subparser):

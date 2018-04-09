@@ -4,11 +4,11 @@ import logging
 import concurrent.futures
 
 from plugins.computers import computer_info
-from modules.adldap import *
-# from modules.convert import *
-# from modules.names import *
-from modules.utils import *
-from modules.config import *
+from lib.adldap import *
+# from lib.convert import *
+# from lib.names import *
+from lib.utils import *
+from lib.config import *
 
 logger = logging.getLogger(__name__)
 
@@ -20,23 +20,19 @@ def get_parser():
     return g_parser
 
 def handler(args, conn):
-    for c in args.hosts:
-        if is_addr(c):
-            fqdn = get_fqdn_by_addr(c, name_server=args.name_server, timeout=args.timeout)
-            if not fqdn:
-                continue
-            host = fqdn.split('.', maxsplit=1)[0]
-        else:
-            host = c.split('.', maxsplit=1)[0]
-        computer = get_computer(conn, args.search_base, host, args.attributes)
-        computer_info(computer, args)
+    for host in args.hosts:
+        if is_addr(host):
+            host = get_fqdn_by_addr(host, name_server=args.name_server, timeout=args.timeout)
+        if host:
+            computer = get_computer(conn, args.search_base, host, args.attributes)
+            computer_info(computer, args)
 
 def get_arg_parser(subparser):
     global g_parser
     if not g_parser:
         g_parser = subparser.add_parser(PLUGIN_NAME, help='list computer')
         g_parser.set_defaults(handler=handler)
-        g_parser.add_argument('-u', '--uptime', action='store_true', help='get uptime via SMB2')
+        g_parser.add_argument('-s', '--smbinfo', action='store_true', help='run smbinfo on each host')
         g_parser.add_argument('-r', '--resolve', action='store_true', help='resolve hostnames')
         g_parser.add_argument('-a', '--attributes', default=[], type=lambda x:x.split(','),
                               help='additional attributes to retrieve')
