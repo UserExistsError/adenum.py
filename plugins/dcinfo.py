@@ -26,7 +26,6 @@ def handler(args, conn):
     servers = get_domain_controllers_by_ldap(get_connection(args), args.search_base, args.name_server, args.timeout)
     for s in servers:
         r = get_dc_info(args, get_connection(args, s['address']))
-        print(r)
         print('address                         ', s['address'])
         print('dnsHostName                     ', r['dnsHostName'])
         print('supportedLDAPVersions           ', ', '.join(map(str, r['supportedLDAPVersion'])))

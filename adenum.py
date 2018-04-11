@@ -65,7 +65,7 @@ List domain joined computers. Add -r and -u to resolve hostnames and get uptime 
 
 = RESOURCES =
 
-all defined AD attributes
+All defined AD attributes
 https://msdn.microsoft.com/en-us/library/ms675090(v=vs.85).aspx
 '''
 

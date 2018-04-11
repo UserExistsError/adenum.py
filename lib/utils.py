@@ -8,20 +8,21 @@ import binascii
 import datetime
 import subprocess
 
-from lib.utils import *
 from lib.names import *
 from lib.config import *
 from lib.convert import *
-
+from lib.inet import *
 
 logger = logging.getLogger(__name__)
 
-private_addrs = (
-    [2130706432, 4278190080], # 127.0.0.0,   255.0.0.0
-    [3232235520, 4294901760], # 192.168.0.0, 255.255.0.0
-    [2886729728, 4293918720], # 172.16.0.0,  255.240.0.0
-    [167772160,  4278190080], # 10.0.0.0,    255.0.0.0
-)
+def get_tcp_socket(addr):
+    if is_addr4(addr):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+    elif is_addr6(addr):
+        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
+    else:
+        raise ValueError('Not a valid IPv4/6 addr: '+str(addr))
+    return s
 
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
     search_base = 'OU=Domain Controllers,'+search_base
@@ -43,6 +44,7 @@ def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
         ('_ldap._tcp.dc._msdcs.'+domain, 'SRV'), # joining domain
         ('_ldap._tcp.'+domain, 'SRV'),
         (domain, 'A'),
+        (domain, 'AAAA'),
     ]
     answer = None
     for q in queries:
@@ -69,44 +71,30 @@ def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
     return servers
 
 
-def is_private_addr(addr):
-    addr = int.from_bytes(socket.inet_aton(addr), 'big')
-    for a in private_addrs:
-        if (addr & a[1]) == a[0]:
-            return True
-    return False
-
-def is_addr(a):
-    try:
-        socket.inet_aton(a)
-    except:
-        return False
-    return True
-
-
 def ping_host(addr, timeout=TIMEOUT):
     ''' check if host is alive by first calling out to ping, then
     by initiating a connection on tcp/445 '''
     if not is_addr(addr):
         return False
     if sys.platform.lower().startswith('windows'):
-        cmd = 'ping -n 1 -w {} {}'.format(int(timeout), addr)
+        cmd = ['ping', '-n', '1', '-w', str(int(timeout)), addr]
     else:
-        cmd = 'ping -c 1 -W {} {}'.format(int(timeout), addr)
-    logger.debug('Running '+cmd)
+        cmd = ['ping', '-c', '1', '-W', str(int(timeout)), addr]
+    logger.debug('Running '+' '.join(cmd))
     try:
-        subprocess.check_call(cmd.split(), stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w'))
+        subprocess.check_call(cmd, stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w'))
         return True
     except Exception:
         pass
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = get_tcp_socket(addr)
     s.settimeout(timeout)
     logger.debug('Connecting to {}:445'.format(addr))
     try:
         s.connect((addr, 445))
         return True
     except socket.timeout:
-        return False
+        pass
+    return False
 
 def parse_target_info(ti, info):
     ''' parse the target info section of an NTLMSSP negotiation '''
@@ -156,12 +144,16 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
 
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
     info = {'smbVersions':set()}
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = get_tcp_socket(addr)
     s.settimeout(timeout)
-    try:
+    logger.debug('smbinfo {}:{}'.format(addr, port))
+
+    if is_addr4(addr):
         s.connect((addr, port))
-    except Exception:
-        return None
+    elif is_addr6(addr):
+        s.connect((addr, port, 0, 0))
+    else:
+        raise ValueError('Invalid address: '+addr)
 
     # send SMB1 NegotiateProtocolRequest with SMB2 dialects. should lead to SMB2
     # negotiation even if SMB1 is disabled.
@@ -253,7 +245,7 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         s.shutdown(socket.SHUT_RDWR)
 
         # send SMB1 NegotiateProtocolRequest with SMB1 only dialects to fingerprint SMB1.
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s = get_tcp_socket(addr)
         s.settimeout(timeout)
         s.connect((addr, port))
         logger.debug('{}:{} Sending SMB1 NegotiateProtocolRequest with SMB1 only dialects'.format(addr, port))

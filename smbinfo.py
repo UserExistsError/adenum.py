@@ -87,8 +87,12 @@ if args.nmap:
 if args.file:
     for addr in open(args.file):
         hosts.add(addr.strip())
+hosts = list(hosts)
 if len(hosts) == 0:
     print('Must specify hosts with --file or use positional args')
     sys.exit()
-with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as e:
-    concurrent.futures.wait([e.submit(get_smb_info_thread, h, args) for h in set(hosts)])
+elif len(hosts) == 1:
+    get_smb_info_thread(hosts[0], args)
+else:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as e:
+        concurrent.futures.wait([e.submit(get_smb_info_thread, h, args) for h in set(hosts)])

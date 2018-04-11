@@ -1,9 +1,12 @@
 import socket
 import logging
+import ipaddress
 import dns.resolver
 
-logger = logging.getLogger(__name__)
 from lib.config import TIMEOUT
+from lib.inet import *
+
+logger = logging.getLogger(__name__)
 
 def get_resolver(name_server=None, timeout=TIMEOUT):
     if name_server:
@@ -15,7 +18,6 @@ def get_resolver(name_server=None, timeout=TIMEOUT):
     resolver.timeout = timeout
     resolver.lifetime = timeout
     return resolver
-
 
 def get_host_by_name(host):
     logger.debug('Resolving {} via default'.format(host))
@@ -43,7 +45,7 @@ def get_addr_by_host(host, name_server=None, timeout=TIMEOUT):
 
 def get_fqdn_by_addr(addr, name_server=None, timeout=TIMEOUT):
     resolver = get_resolver(name_server, timeout)
-    arpa = '.'.join(reversed(addr.split('.'))) + '.in-addr.arpa.'
+    arpa = dns.reversename.from_address(addr)
     try:
         answer = resolver.query(arpa, 'PTR', 'IN')
         logger.debug('Resolved {} to {} via {}'.format(arpa, str(answer[0])[:-1], name_server or 'default'))
