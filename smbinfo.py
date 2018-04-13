@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 import os
 import sys
-import time
 import socks
 import socket
-import struct
 import argparse
-import binascii
-import datetime
 import logging
 import concurrent.futures
 import threading
 import xml.etree.ElementTree as ET
 
-from lib.utils import get_smb_info
+logger = logging.getLogger(__name__)
 
-def get_smb_info_thread(addr, args):
+from lib.utils import get_smb_info
+from lib.inet import is_addr
+from lib.names import get_host_by_name
+
+def get_smb_info_thread(host, args):
+    if is_addr(host):
+        addr = host
+    else:
+        addr = get_host_by_name(host)
+        if not addr:
+            logger.error('Failed to resolve host: '+host)
+            return
     info = get_smb_info(addr, args.timeout, args.smb_port)
     if args.version:
         if info['auth_realm'] == 'workgroup':
