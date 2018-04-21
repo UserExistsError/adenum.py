@@ -20,7 +20,11 @@ def get_parser():
 
 def computer_info(computer, args):
     ''' runs as a thread to resolve and find uptime of the host '''
-    hostname = computer['attributes']['dNSHostName'][0]
+    if len(computer['attributes']['dNSHostName']):
+        hostname = computer['attributes']['dNSHostName'][0]
+    else:
+        hostname = computer['attributes']['name'][0]
+
     info = ''
     if args.resolve or args.smbinfo or args.alive:
         for name_server in set([args.name_server, args.server, None]):

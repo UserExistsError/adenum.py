@@ -1,5 +1,6 @@
 import ldap3
 import logging
+import binascii
 import tempfile
 import collections
 import configparser

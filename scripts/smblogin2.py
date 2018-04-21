@@ -24,6 +24,9 @@ from impacket.smb import STATUS_LOGON_FAILURE, STATUS_SUCCESS
 STATUS_ACCESS_DENIED=0xc0000022
 STATUS_BAD_NETWORK_NAME=0xc00000cc
 
+class DomainLoginError(Exception):
+    pass
+
 def login(host, args):
     try:
         smbconn = SMBConnection(host, host, timeout=args.timeout) # throws socket.error
@@ -47,7 +50,8 @@ def login(host, args):
         if error_code == STATUS_LOGON_FAILURE:
             status = 'Failure'
             if args.domain != '.' and smbconn.getServerDomain() != '':
-                raise RuntimeError('Aborting: domain creds are invalid, preventing lockout')
+                sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, status))
+                raise DomainLoginError('Aborting: domain creds are invalid, preventing lockout')
         sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, status))
         return
 
@@ -79,8 +83,11 @@ def auth_thread(param):
     host, args = param
     try:
         login(host, args)
-    except:
-        sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, 'UnknownError'))
+    except DomainLoginError:
+        sys.stdout.write('Exiting')
+        sys.exit()
+    except Exception as e:
+        sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, 'UnknownError: '+str(e)))
 
 
 if __name__ == '__main__':
