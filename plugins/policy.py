@@ -15,7 +15,7 @@ def handler(args, conn):
     print('= Default Domain Policy =')
     pol = get_default_pwd_policy(args, conn)
     if pol:
-        for k in pol:
+        for k in sorted(pol.keys()):
             print('{:30s} {}'.format(k, pol[k]))
     else:
         print('Failed to retrieve default domain password policy')

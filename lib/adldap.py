@@ -12,15 +12,6 @@ from lib.config import MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
-# chars to escape for Active Directory
-escape_trans = str.maketrans(
-    {'*': r'\2a',
-     '(': r'\28',
-     ')': r'\29',
-     '\\': r'\5c',
-     '\x00': r'\00',
-     '/': r'\2f'})
-
 # ms-Mcs-AdmPwd (LAPS password). see also post/windows/gather/credentials/enum_laps
 # mcs-AdmPwdExpirationTime can be used to determine if LAPS is in use from any authenticated user.
 # ref https://adsecurity.org/?p=3164
@@ -75,6 +66,14 @@ USER_ATTRIBUTES=[
         'objectSid',
     ]
 
+# chars to escape for Active Directory
+escape_trans = str.maketrans(
+    {'*': r'\2a',
+     '(': r'\28',
+     ')': r'\29',
+     '\\': r'\5c',
+     '\x00': r'\00',
+     '/': r'\2f'})
 
 def escape(s):
     ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
@@ -114,7 +113,9 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
             else:
                 r = cs[cs.index(l)+1]
         elif r == cs[-1]:
-            # done
+            # get any remaining 'z' results
+            results.extend(conn.response)
+            conn.search(search_base, '(&{}(!(cn<=z)))'.format(simple_filter), attributes=attributes)
             results.extend(conn.response)
             break
         else:
@@ -188,12 +189,13 @@ def get_users_in_group(conn, search_base, group):
         group = [g for g in groups if cn(g.get('dn', '')).lower() == group.lower()][0] # get group dn
     gid = gid_from_sid(group['attributes']['objectSid'][0])
     # get all users with primaryGroupID of gid
-    conn.search(search_base, '(&(objectCategory=user)(primaryGroupID={}))'.format(gid),
-                attributes=['distinguishedName', 'userPrincipalName', 'samAccountName'])
-    users = [u for u in conn.response if u.get('dn', False)]
+    response = get_all(conn, search_base, '(&(objectCategory=user)(primaryGroupID={}))'.format(gid),
+                       attributes=['distinguishedName', 'userPrincipalName', 'samAccountName'])
+
+    users = [u for u in response if u.get('dn', False)]
     # get all users in group using "memberOf" attribute. primary group is not included in the "memberOf" attribute
-    conn.search(search_base, '(&(objectCategory=user)(memberOf='+group['dn']+'))', attributes=['distinguishedName', 'userPrincipalName'])
-    users += [u for u in conn.response if u.get('dn', False)]
+    response = get_all(conn, search_base, '(&(objectCategory=user)(memberOf='+group['dn']+'))', attributes=['distinguishedName', 'userPrincipalName'])
+    users += [u for u in response if u.get('dn', False)]
     return users
 
 
