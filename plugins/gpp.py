@@ -92,7 +92,6 @@ def handler(args, conn):
                                 tmp = io.BytesIO()
                                 a, n = conn.retrieveFile('SYSVOL', get, tmp)
                                 creds = extract_cpassword(tmp.getvalue().decode('utf-8'), t.filename)
-                                open(p.filename+x.filename, 'w').write(tmp.getvalue().decode('utf-8'))
                                 if len(creds):
                                     print('File:', get)
                                     for c in creds:

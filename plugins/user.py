@@ -17,7 +17,7 @@ def print_user(user, conn, args):
         print('UserName                 ', a.get('samAccountName', None)[0] or \
               a.get('userPrincipalName')[0].split('@')[0])
     except:
-        print('UserName                 ', cn(u['dn']))
+        print('UserName                 ', cn(user['dn']))
     print('FullName                 ', get_attr(a, 'givenName', ''), get_attr(a, 'middleName', ''))
     print('DistinguishedName        ', a['distinguishedName'][0])
     print('UserPrincipalName        ', get_attr(a, 'userPrincipalName', ''))
