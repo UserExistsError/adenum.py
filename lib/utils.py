@@ -143,7 +143,30 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
     return None
 
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
-    info = {'smbVersions':set()}
+    def get_smb_error(data):
+        # assumes smb direct over 445
+        return struct.unpack('<L', data[9:13])[0]
+    info = {
+        'auth_realm':'',
+        'build':'',
+        'date':'',
+        'dns_domain':'',
+        'dnsHostName':'',
+        'dns_name':'',
+        'dns_tree_name':'',
+        'kernel':'',
+        'native_lm':'',
+        'native_os':'',
+        'netbios_domain':'',
+        'netbios_name':'',
+        'smb1_signing':'',
+        'smb2_signing':'',
+        'smbNegotiated':'',
+        'smbVersions':set(),
+        'time':'',
+        'uptime':'',
+    }
+
     s = get_tcp_socket(addr)
     s.settimeout(timeout)
     logger.debug('smbinfo {}:{}'.format(addr, port))
@@ -281,27 +304,33 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
                 b'6d00620061000000')
         )
         data = s.recv(4096)
-        logger.debug('{}:{} Received SMB1 SessionSetup response. Parsing native strings'.format(addr, port))
-        native_offset = 47 + struct.unpack('<H', data[43:45])[0]
-        # align to 16 bits
-        native_offset += native_offset % 2
-        # Samba may place a 3rd "Primary Domain" field here.
-        native_os, native_lm = data[native_offset:].split(b'\x00\x00\x00', maxsplit=2)[:2]
-        native_os += b'\x00'
-        native_lm = native_lm.rstrip(b'\x00') + b'\x00'
-        info['native_os'] = native_os.decode('utf-16-le')
-        info['native_lm'] = native_lm.decode('utf-16-le')
         info['smbVersions'].add(1)
+        logger.debug('{}:{} Received SMB1 SessionSetup response. Parsing native strings'.format(addr, port))
+        status = get_smb_error(data)
+        logger.debug('SMB Status: 0x{:08x}'.format(status))
+        if status == 0xc0000002: #STATUS_NOT_IMPLEMENTED. expect 0xc0000016 STATUS_MORE_PROCESSING_REQUIRED
+            logger.error('Host does not support NTLM auth')
+        else:
+            native_offset = 47 + struct.unpack('<H', data[43:45])[0]
+            # align to 16 bits
+            native_offset += native_offset % 2
+            # Samba may place a 3rd "Primary Domain" field here.
+            native_os, native_lm = data[native_offset:].split(b'\x00\x00\x00', maxsplit=2)[:2]
+            native_os += b'\x00'
+            native_lm = native_lm.rstrip(b'\x00') + b'\x00'
+            info['native_os'] = native_os.decode('utf-16-le')
+            info['native_lm'] = native_lm.decode('utf-16-le')
         s.shutdown(socket.SHUT_RDWR)
-    # get domain/workgroup info from NTLMSSP
-    info['kernel'] = '{}.{}'.format(ntlmssp[48], ntlmssp[49])
-    info['build'] = '{}'.format(struct.unpack('<H', ntlmssp[50:52])[0])
-    flags = struct.unpack('<L', ntlmssp[20:24])[0]
-    info['auth_realm'] = 'domain' if flags & 0x10000 else 'workgroup'
-    ti_len = struct.unpack('<H', ntlmssp[40:42])[0]
-    ti_offset = struct.unpack('<L', ntlmssp[44:48])[0]
-    ti = ntlmssp[ti_offset:ti_offset+ti_len]
-    parse_target_info(ti, info)
+    if len(ntlmssp) > 1:
+        # get domain/workgroup info from NTLMSSP
+        info['kernel'] = '{}.{}'.format(ntlmssp[48], ntlmssp[49])
+        info['build'] = '{}'.format(struct.unpack('<H', ntlmssp[50:52])[0])
+        flags = struct.unpack('<L', ntlmssp[20:24])[0]
+        info['auth_realm'] = 'domain' if flags & 0x10000 else 'workgroup'
+        ti_len = struct.unpack('<H', ntlmssp[40:42])[0]
+        ti_offset = struct.unpack('<L', ntlmssp[44:48])[0]
+        ti = ntlmssp[ti_offset:ti_offset+ti_len]
+        parse_target_info(ti, info)
     info['smbVersions'] = ', '.join(map(str, info['smbVersions']))
     # ref: https://blogs.technet.microsoft.com/josebda/2010/12/01/the-basics-of-smb-signing-covering-both-smb1-and-smb2/
     if smb1_signing is not None:

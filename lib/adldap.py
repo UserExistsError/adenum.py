@@ -182,11 +182,19 @@ def get_user_groups(conn, search_base, user):
 
 def get_users_in_group(conn, search_base, group):
     ''' return all members of group '''
-    groups = get_groups(conn, search_base)
     if group.find('=') > 0:
-        group = [g for g in groups if g.get('dn', '').lower() == group.lower()][0] # get group dn
+        conn.search(search_base, '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
+                    attributes=['objectSid', 'distinguishedName'])
     else:
-        group = [g for g in groups if cn(g.get('dn', '')).lower() == group.lower()][0] # get group dn
+        conn.search(search_base, '(&(objectCategory=Group)(cn={}))'.format(group),
+                    attributes=['objectSid', 'distinguishedName'])
+    if len(conn.response) == 0:
+        logger.error('Group does not exist: '+group)
+        raise ValueError('Group does not exist: '+group)
+    if len(conn.response) > 1:
+        logger.error('Group returned multiple results: '+group)
+        raise ValueError('Group returned multiple results: '+group)
+    group = conn.response[0]
     gid = gid_from_sid(group['attributes']['objectSid'][0])
     # get all users with primaryGroupID of gid
     response = get_all(conn, search_base, '(&(objectCategory=user)(primaryGroupID={}))'.format(gid),
@@ -214,7 +222,8 @@ def get_dc_info(args, conn=None):
         conn = ldap3.Connection(server, auto_bind=True, version=args.version, receive_timeout=args.timeout)
     conn.search('', '(objectClass=*)', search_scope=ldap3.BASE, dereference_aliases=ldap3.DEREF_NEVER,
                 attributes=['dnsHostName', 'supportedLDAPVersion', 'rootDomainNamingContext',
-                            'domainFunctionality', 'forestFunctionality', 'domainControllerFunctionality'])
+                            'domainFunctionality', 'forestFunctionality', 'domainControllerFunctionality',
+                            'defaultNamingContext'])
     r = conn.response[0]['raw_attributes']
     for a in r:
         if a == 'supportedLDAPVersion':

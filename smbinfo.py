@@ -3,10 +3,11 @@ import os
 import sys
 import socks
 import socket
-import argparse
 import logging
-import concurrent.futures
+import argparse
 import threading
+import dns.query
+import concurrent.futures
 import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)

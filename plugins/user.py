@@ -26,7 +26,10 @@ def print_user(user, conn, args):
     print('DisplayName              ', ' '.join(a['displayName']))
     print('E-mail                   ', ' '.join(a['mail']))
     print('JobTitle                 ', ' '.join(a['title']))
-    print('SID                      ', sid_to_str(a['objectSid'][0]))
+    try:
+        print('SID                      ', sid_to_str(a['objectSid'][0]))
+    except:
+        print('SID                      ')
 
     try:
         print('AccountCreated           ', gt_to_str(a['whenCreated'][0]))

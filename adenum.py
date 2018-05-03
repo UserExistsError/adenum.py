@@ -161,14 +161,15 @@ if __name__ == '__main__':
                             logger.debug('Found domain in resolv.conf: '+args.domain)
                             break
         else:
-            fqdn = get_fqdn_by_addr(args.server, args.name_server, args.timeout)
-            if not fqdn and args.server != args.name_server:
-                # try query against the domain controller
-                fqdn = get_fqdn_by_addr(args.server, args.server, args.timeout)
-                if not fqdn:
-                    logger.debug('Querying LDAP for domain')
-                    info = get_dc_info(args)
-                    args.domain = info['rootDomainNamingContext'][3:].lower().replace(',dc=', '.')
+            logger.debug('Querying LDAP for domain')
+            info = get_dc_info(args)
+            args.domain = info['defaultNamingContext'][3:].lower().replace(',dc=', '.')
+            #args.domain = info['rootDomainNamingContext'][3:].lower().replace(',dc=', '.')
+            if not args.domain:
+                fqdn = get_fqdn_by_addr(args.server, args.name_server, args.timeout)
+                if not fqdn and args.server != args.name_server:
+                    # try dns query against the domain controller
+                    fqdn = get_fqdn_by_addr(args.server, args.server, args.timeout)
         if fqdn:
             args.domain = fqdn.split('.', maxsplit=1)[-1]
         if not args.domain:
