@@ -87,6 +87,13 @@ def get_default_pwd_policy(args, conn):
             ldap_props = conn.response[0]['attributes']
         except:
             pass
+        # ldap stores ints differently than the .inf in sysvol
+        if 'minPwdAge' in ldap_props:
+            ldap_props['minPwdAge'][0] = str(int(ldap_props['minPwdAge'][0])//1440) # to days
+        if 'maxPwdAge' in ldap_props:
+            ldap_props['maxPwdAge'][0] = str(int(ldap_props['maxPwdAge'][0])//1440) # to days
+        if 'lockoutDuration' in ldap_props:
+            ldap_props['lockoutDuration'][0] = str(int(ldap_props['lockoutDuration'][0])//3600) # to minutes
     else:
         gpo_path = r'\\' + args.domain + r'\Policies\{31B2F340-016D-11D2-945F-00C04FB984F9}\MACHINE'
     logger.debug('GPOPath '+gpo_path)

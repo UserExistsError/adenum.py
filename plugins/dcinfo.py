@@ -25,7 +25,12 @@ def handler(args, conn):
     }
     servers = get_domain_controllers_by_ldap(get_connection(args), args.search_base, args.name_server, args.timeout)
     for s in servers:
-        r = get_dc_info(args, get_connection(args, s['address']))
+        logger.debug('Connecting to DC {} ({})'.format(s['hostname'], s['address']))
+        try:
+            r = get_dc_info(args, get_connection(args, s['address']))
+        except:
+            logger.error('DC connection failed: {} ({})'.format(s['hostname'], s['address']))
+            continue
         print('address                         ', s['address'])
         print('dnsHostName                     ', r['dnsHostName'])
         print('supportedLDAPVersions           ', ', '.join(map(str, r['supportedLDAPVersion'])))
