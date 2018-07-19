@@ -7,6 +7,7 @@ import logging
 import binascii
 import datetime
 import subprocess
+from ctypes import LittleEndianStructure, c_uint32
 
 from lib.names import *
 from lib.config import *
@@ -26,7 +27,7 @@ def get_tcp_socket(addr):
 
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
     search_base = 'OU=Domain Controllers,'+search_base
-    conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.LEVEL,
+    conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.SUBTREE,
                 attributes=['dNSHostName', 'objectSid'])
     servers = []
     for s in conn.response:
@@ -142,6 +143,50 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
             pass
     return None
 
+class NegotiateFlags(LittleEndianStructure):
+    _fields_ = list(reversed([
+        ('NTLMSSP_NEGOTIATE_56', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_KEY_EXCH', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_128', c_uint32, 1),
+        ('reserved0', c_uint32, 1),
+        ('reserved1', c_uint32, 1),
+        ('reserved2', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_VERSION', c_uint32, 1),
+        ('reserved3', c_uint32, 1),
+
+        ('NTLMSSP_NEGOTIATE_TARGET_INFO', c_uint32, 1),
+        ('NTLMSSP_REQUEST_NON_NT_SESSION_KEY', c_uint32, 1),
+        ('reserved4', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_IDENTIFY', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY', c_uint32, 1),
+        ('reserved5', c_uint32, 1),
+        ('NTLMSSP_TARGET_TYPE_SERVER', c_uint32, 1),
+        ('NTLMSSP_TARGET_TYPE_DOMAIN', c_uint32, 1),
+
+        ('NTLMSSP_NEGOTIATE_ALWAYS_SIGN', c_uint32, 1),
+        ('reserved6', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_OEM_WORKSTATION_SUPPLIED', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_OEM_DOMAIN_SUPPLIED', c_uint32, 1),
+        ('ANONYMOUS', c_uint32, 1),
+        ('reserved7', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_NTLM', c_uint32, 1),
+        ('reserved9', c_uint32, 1),
+
+        ('NTLMSSP_NEGOTIATE_LM_KEY', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_DATAGRAM', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_SEAL', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_SIGN', c_uint32, 1),
+        ('reserved10', c_uint32, 1),
+        ('NTLMSSP_REQUEST_TARGET', c_uint32, 1),
+        ('NTLM_NEGOTIATE_OEM', c_uint32, 1),
+        ('NTLMSSP_NEGOTIATE_UNICODE', c_uint32, 1),
+    ]))
+    def __str__(self):
+        s = ''
+        for n, t, _ in self._fields_:
+            s += '{:45s} {}\n'.format(n, getattr(self, n))
+        return s
+
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
     def get_smb_error(data):
         # assumes smb direct over 445
@@ -215,7 +260,6 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
             b'02020aa22a04284e544c4d53535000010000001582086200000000280000'
             b'000000000028000000060100000000000f0055006e006900780000005300'
             b'61006d00620061000000'
-            
         ))
         data = s.recv(4096)
         logger.debug('{}:{} Received SMB1 SessionSetup AndX Response'.format(addr, port))
@@ -325,8 +369,10 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         # get domain/workgroup info from NTLMSSP
         info['kernel'] = '{}.{}'.format(ntlmssp[48], ntlmssp[49])
         info['build'] = '{}'.format(struct.unpack('<H', ntlmssp[50:52])[0])
-        flags = struct.unpack('<L', ntlmssp[20:24])[0]
-        info['auth_realm'] = 'domain' if flags & 0x10000 else 'workgroup'
+        # ref: https://msdn.microsoft.com/en-us/library/cc236650.aspx
+        logger.debug('flags {:08x}'.format(struct.unpack('<L', ntlmssp[20:24])[0]))
+        flags = NegotiateFlags.from_buffer_copy(ntlmssp[20:24])
+        info['auth_realm'] = 'domain' if flags.NTLMSSP_TARGET_TYPE_DOMAIN else 'workgroup'
         ti_len = struct.unpack('<H', ntlmssp[40:42])[0]
         ti_offset = struct.unpack('<L', ntlmssp[44:48])[0]
         ti = ntlmssp[ti_offset:ti_offset+ti_len]

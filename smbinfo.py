@@ -25,6 +25,8 @@ def get_smb_info_thread(host, args):
             logger.error('Failed to resolve host: '+host)
             return
     info = get_smb_info(addr, args.timeout, args.smb_port)
+    if not info:
+        return
     if args.version:
         if info['auth_realm'] == 'workgroup':
             s = '{} (nativelm:{}) (kernel:{}) (build:{}) (workgroup:{}) (name:{})'.format(
@@ -36,14 +38,14 @@ def get_smb_info_thread(host, args):
                 info['dns_domain'], info['dns_name'].split('.')[0])
     else:
         s =  'Address:       {}\n'.format(addr)
+        s += 'SMBVersions:   {}\n'.format(info['smbVersions'])
         s += 'Negotiated:    {}\n'.format(info['smbNegotiated'])
+        s += 'SMB1Signing:   {}\n'.format(info.get('smb1_signing', ''))
+        s += 'SMB2Signing:   {}\n'.format(info.get('smb2_signing', ''))
         s += 'Build:         {}\n'.format(info.get('build', ''))
         s += 'Kernel:        {}\n'.format(info.get('kernel', ''))
         s += 'NativeOS:      {}\n'.format(info.get('native_os', ''))
         s += 'NativeLM:      {}\n'.format(info.get('native_lm', ''))
-        s += 'Available:     {}\n'.format(info['smbVersions'])
-        s += 'SMB1Signing:   {}\n'.format(info.get('smb1_signing', ''))
-        s += 'SMB2Signing:   {}\n'.format(info.get('smb2_signing', ''))
         s += 'Uptime:        {}\n'.format(info.get('uptime', ''))
         s += 'Date:          {}\n'.format(info.get('date', ''))
         s += 'AuthRealm:     {}\n'.format(info['auth_realm'])

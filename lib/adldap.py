@@ -218,7 +218,7 @@ def get_user_info(conn, search_base, user):
 
 def get_dc_info(args, conn=None):
     if not conn:
-        server = ldap3.Server(args.server)
+        server = ldap3.Server(args.server, args.port)
         conn = ldap3.Connection(server, auto_bind=True, version=args.version, receive_timeout=args.timeout)
     conn.search('', '(objectClass=*)', search_scope=ldap3.BASE, dereference_aliases=ldap3.DEREF_NEVER,
                 attributes=['dnsHostName', 'supportedLDAPVersion', 'rootDomainNamingContext',
