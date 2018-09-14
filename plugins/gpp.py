@@ -7,8 +7,12 @@ import xml.etree.ElementTree as ET
 
 from lib.adldap import *
 from lib.convert import *
+from lib.password import MyMD4Class
+
+import smb
 from smb.SMBConnection import SMBConnection
 from smb.smb_constants import *
+
 
 '''
 References
@@ -74,6 +78,8 @@ def extract_cpassword(data, folder):
 def handler(args, conn):
     ''' look for files sysvol\domain\policies\{GUID}\*\Preferences\*\*.xml containing "cpassword" '''
     dc_hostname = args.hostname or args.server
+    if args.nthash:
+        smb.ntlm.MD4 = MyMD4Class.new
     conn = SMBConnection(args.username, args.password, 'adenum', dc_hostname, use_ntlm_v2=True,
                          domain=args.domain, is_direct_tcp=(args.smb_port != 139))
     conn.connect(args.server, port=args.smb_port)
