@@ -5,13 +5,57 @@ import logging
 import hashlib
 import getpass
 
-from lib.config import TIMEOUT
+from lib.config import TIMEOUT, MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
+class GeneratingConnection(ldap3.Connection):
+    ''' subclass for doing low memory footprint searching with paging '''
+    def __init__(self, *args, **kwargs):
+        kwargs['auto_range'] = True
+        self.timeout = kwargs.get('timeout', TIMEOUT)
+        del kwargs['timeout']
+        ldap3.Connection.__init__(self, *args, **kwargs)
+
+    def search(self, search_base, search_filter, search_scope=ldap3.SUBTREE, **kwargs):
+        ''' search method for memory conscious searching. as such, no caching is done '''
+        if 'attributes' not in kwargs:
+            kwargs['attributes'] = []
+        kwargs['time_limit'] = self.timeout
+        kwargs['paged_criticality'] = True
+        kwargs['paged_size'] = kwargs.get('paged_size', MAX_PAGE_SIZE)
+        logger.debug('Performing paged search with page size '+str(kwargs['paged_size']))
+        logger.debug('SEARCH ({}) {} {}'.format(search_base, search_filter, search_scope))
+
+        count = 0
+        while True:
+            super().search(search_base, search_filter, search_scope, **kwargs)
+            # return only the results
+            for obj in self.response:
+                if obj['type'].lower() == 'searchresentry':
+                    for a in [a for a in obj['attributes'] if a.startswith('member;range=')]:
+                        del obj['attributes'][a]
+                    count += 1
+                    yield obj
+
+            logger.debug('{} results paged'.format(count))
+            # break if not doing paged search
+            if 'paged_size' not in kwargs:
+                break
+
+            cookie = self.result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
+            if not cookie:
+                # b'' -> last page
+                logger.debug('No cookie. No more pages')
+                break
+            kwargs['paged_cookie'] = cookie
+
+        if self.result['result'] == 4:
+            logger.warn('Max results reached: '+str(len(self.response)))
+
+
 class CachingConnection(ldap3.Connection):
-    ''' Subclass of ldap3.Connection which uses the range attribute
-    to gather all results. It will also cache searches. '''
+    ''' Subclass of ldap3.Connection which will cache searches. '''
     def __init__(self, *args, **kwargs):
         self.cache = {}
         kwargs['auto_range'] = True
@@ -31,10 +75,11 @@ class CachingConnection(ldap3.Connection):
             self.response = self.cache[sha1]['response']
             self.result = self.cache[sha1]['result']
             return
+
         logger.debug('SEARCH ({}) {} {}'.format(search_base, search_filter, search_scope))
         response = []
-
         kwargs['paged_criticality'] = True
+        count = 0
 
         while True:
             super().search(search_base, search_filter, search_scope, **kwargs)
@@ -43,8 +88,10 @@ class CachingConnection(ldap3.Connection):
                 if obj['type'].lower() == 'searchresentry':
                     for a in [a for a in obj['attributes'] if a.startswith('member;range=')]:
                         del obj['attributes'][a]
+                    count += 1
                     response.append(obj)
 
+            logger.debug('{} results paged'.format(count))
             # break if not doing paged search
             if 'paged_size' not in kwargs:
                 break
@@ -55,15 +102,15 @@ class CachingConnection(ldap3.Connection):
                 break
             kwargs['paged_cookie'] = cookie
 
-        self.response = response
-        logger.debug('RESULT {} {}'.format(len(self.response), str(self.result)))
-        self.cache[sha1] = {'response':self.response, 'result':self.result}
+        logger.debug('RESULT {} {}'.format(len(response), str(self.result)))
+        self.cache[sha1] = {'response':response, 'result':self.result}
 
         if self.result['result'] == 4:
-            logger.warn('Max results reached: '+str(len(self.response)))
+            logger.warn('Max results reached: '+str(len(response)))
 
+        return response
 
-def get_connection(args, addr=None):
+def get_connection(args, addr=None, conn_class=CachingConnection):
     username = None
     password = None
     if not args.anonymous:
@@ -85,7 +132,7 @@ def get_connection(args, addr=None):
                            version=ssl.PROTOCOL_TLSv1)
     server = ldap3.Server(addr or args.server, use_ssl=args.tls, port=args.port, tls=tls_config, get_info=None)
     auth = ldap3.ANONYMOUS if args.anonymous else ldap3.NTLM
-    conn = CachingConnection(server, user=username, password=password, authentication=auth,
+    conn = conn_class(server, user=username, password=password, authentication=auth,
                              version=args.version, read_only=True, auto_range=True,
                              auto_bind=False, receive_timeout=args.timeout, timeout=args.timeout)
     conn.open()

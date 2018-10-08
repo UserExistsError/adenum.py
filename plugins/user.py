@@ -61,23 +61,24 @@ def print_user(user, conn, args):
     except:
         pass
 
-    try:
-        groups = get_user_groups(conn, args.search_base, user['dn'])
-        primary_group = [g['dn'] for g in groups if struct.unpack(
-            '<H', g['attributes']['objectSid'][0][-4:-2])[0] == int(a['primaryGroupID'][0])][0]
-        print('PrimaryGroup              "{}"'.format(primary_group if args.dn else cn(primary_group)))
-        # group scopes: https://technet.microsoft.com/en-us/library/cc755692.aspx
-        # http://www.harmj0y.net/blog/activedirectory/a-pentesters-guide-to-group-scoping/
-        for g in groups:
-            logger.debug(hex(dw(int(g['attributes']['groupType'][0]))) + ' ' + cn(g['dn']))
-        domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
-        global_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x2]
-        universal_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x8]
-        print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), domain_local_groups)))
-        print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), global_groups)))
-        print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), universal_groups)))
-    except:
-        pass
+    if not args.basic:
+        try:
+            groups = get_user_groups(conn, args.search_base, user['dn'])
+            primary_group = [g['dn'] for g in groups if struct.unpack(
+                '<H', g['attributes']['objectSid'][0][-4:-2])[0] == int(a['primaryGroupID'][0])][0]
+            print('PrimaryGroup              "{}"'.format(primary_group if args.dn else cn(primary_group)))
+            # group scopes: https://technet.microsoft.com/en-us/library/cc755692.aspx
+            # http://www.harmj0y.net/blog/activedirectory/a-pentesters-guide-to-group-scoping/
+            for g in groups:
+                logger.debug(hex(dw(int(g['attributes']['groupType'][0]))) + ' ' + cn(g['dn']))
+            domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
+            global_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x2]
+            universal_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x8]
+            print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), domain_local_groups)))
+            print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), global_groups)))
+            print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), universal_groups)))
+        except:
+            pass
     print('')
 
 
@@ -103,4 +104,5 @@ def get_arg_parser(subparser):
         g_parser.set_defaults(handler=handler)
         g_parser.add_argument('users', nargs='*', help='users to search')
         g_parser.add_argument('-f', '--userfile', help='file of userPrincipalNames, CNs, and/or samAccountNames')
+        g_parser.add_argument('--basic', action='store_true', help='get basic user info')
     return g_parser

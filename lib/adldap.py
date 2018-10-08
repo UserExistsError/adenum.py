@@ -85,8 +85,7 @@ def get_all(conn, search_base, simple_filter, attributes=[]):
 
 def get_all_paged(conn, search_base, simple_filter, attributes=[]):
     ''' Fetch all results with paging. Not all DCs support this '''
-    conn.search(search_base, simple_filter, attributes=attributes, paged_size=MAX_PAGE_SIZE)
-    return conn.response
+    return conn.search(search_base, simple_filter, attributes=attributes, paged_size=MAX_PAGE_SIZE)
 
 def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
     ''' TODO this is broken
@@ -101,12 +100,12 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
     results = []
     while 1:
         f = ft.format(simple_filter, l, r)
-        conn.search(search_base, f, attributes=attributes)
+        response = conn.search(search_base, f, attributes=attributes)
         if conn.result['result'] == 4:
             # reached max results
             if cs.index(l) == cs.index(r) + 1:
                 logger.debug('Failed to limit results. Moving on')
-                results.extend(conn.response)
+                results.extend(response)
                 ft = '(&{}(!(cn<={}))(cn<={}))'
                 l = r
                 r = cs[-1]
@@ -114,9 +113,9 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
                 r = cs[cs.index(l)+1]
         elif r == cs[-1]:
             # get any remaining 'z' results
-            results.extend(conn.response)
+            results.extend(response)
             conn.search(search_base, '(&{}(!(cn<=z)))'.format(simple_filter), attributes=attributes)
-            results.extend(conn.response)
+            results.extend(response)
             break
         else:
             results.extend(conn.response)
@@ -130,8 +129,8 @@ def get_users(conn, search_base, basic=False):
     ''' get all domain users '''
     attrs = USER_ATTRIBUTES
     if basic:
-        attrs = ['userPrincipalName', 'samAccountName', 'objectSid', 'distinguishedName']
-    return get_all(conn, search_base, '(objectCategory=user)', attrs)
+        attrs = ['userPrincipalName', 'samAccountName', 'objectSid', 'distinguishedName', 'memberOf']
+    return get_all(conn, search_base, '(objectCategory=user)', attributes=attrs)
 
 def get_groups(conn, search_base):
     ''' get all domain groups '''
@@ -164,7 +163,7 @@ def get_user_dn(conn, search_base, user):
 
 def get_user_groups(conn, search_base, user):
     ''' get all groups for user, domain and local. see groupType attribute to check domain vs local.
-    user should be a dn'''
+    user should be a dn. '''
     conn.search(search_base, '(&(objectCategory=User)(distinguishedName='+user+'))', attributes=['memberOf', 'primaryGroupID'])
     group_dns = conn.response[0]['attributes']['memberOf']
 

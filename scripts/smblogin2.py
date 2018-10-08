@@ -78,14 +78,20 @@ def login(host, args):
         smbconn.logoff()
     except:
         pass
+    sys.stdout.write('thread exit\n')
+
+abort_flag = False
 
 def auth_thread(param):
+    global abort_flag
+    if abort_flag:
+        return
     host, args = param
     try:
         login(host, args)
     except DomainLoginError:
-        sys.stdout.write('Exiting')
-        sys.exit()
+        sys.stdout.write('Aborting due to failed domain login attempt\n')
+        abort_flag = True
     except Exception as e:
         sys.stdout.write('{} {}\\{} {}\n'.format(host, args.domain, args.username+':'+args.password, 'UnknownError: '+str(e)))
 
