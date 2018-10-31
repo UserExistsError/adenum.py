@@ -10,9 +10,9 @@ g_parser = None
 
 EXAMPLES='''
         # look for users by last name
-        query -f '(&(objectCategory=user)(displayName=*LASTNAME*)' -s subtree userPrincipalName samAccountName description
+        query -f '(&(objectCategory=user)(displayName=*LASTNAME*))' -s subtree userPrincipalName samAccountName description
         # look for exchange servers
-        query -f '(&(objectCategory=computer)(name=*EXCH*)' -s subtree description dNSHostName operatingSystemVersion
+        query -f '(&(objectCategory=computer)(name=*EXCH*))' -s subtree description dNSHostName operatingSystemVersion
 '''
 
 def get_parser():

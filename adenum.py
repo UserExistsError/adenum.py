@@ -220,5 +220,6 @@ if __name__ == '__main__':
     logger.debug('WHOAMI '+(conn.extend.standard.who_am_i() or ''))
 
     if args.handler:
+        setattr(conn, 'default_search_base', args.search_base)
         args.handler(args, conn)
     conn.unbind()

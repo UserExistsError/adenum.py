@@ -74,7 +74,7 @@ class CachingConnection(ldap3.Connection):
             logger.debug('CACHE HIT ({}) {} {}'.format(search_base, search_filter, search_scope))
             self.response = self.cache[sha1]['response']
             self.result = self.cache[sha1]['result']
-            return
+            return self.response
 
         logger.debug('SEARCH ({}) {} {}'.format(search_base, search_filter, search_scope))
         response = []

@@ -64,6 +64,7 @@ USER_ATTRIBUTES=[
         'useraccountcontrol',
         'objectGUID',
         'objectSid',
+        'nTSecurityDescriptor',
     ]
 
 # chars to escape for Active Directory
@@ -127,7 +128,7 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
 
 def get_users(conn, search_base, basic=False):
     ''' get all domain users '''
-    attrs = USER_ATTRIBUTES
+    attrs = list(USER_ATTRIBUTES)
     if basic:
         attrs = ['userPrincipalName', 'samAccountName', 'objectSid', 'distinguishedName', 'memberOf']
     return get_all(conn, search_base, '(objectCategory=user)', attributes=attrs)
@@ -182,18 +183,18 @@ def get_user_groups(conn, search_base, user):
 def get_users_in_group(conn, search_base, group):
     ''' return all members of group '''
     if group.find('=') > 0:
-        conn.search(search_base, '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
+        response = conn.search(search_base, '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
                     attributes=['objectSid', 'distinguishedName'])
     else:
-        conn.search(search_base, '(&(objectCategory=Group)(cn={}))'.format(group),
+        response = conn.search(search_base, '(&(objectCategory=Group)(cn={}))'.format(group),
                     attributes=['objectSid', 'distinguishedName'])
-    if len(conn.response) == 0:
+    if len(response) == 0:
         logger.error('Group does not exist: '+group)
         raise ValueError('Group does not exist: '+group)
-    if len(conn.response) > 1:
+    if len(response) > 1:
         logger.error('Group returned multiple results: '+group)
         raise ValueError('Group returned multiple results: '+group)
-    group = conn.response[0]
+    group = response[0]
     gid = gid_from_sid(group['attributes']['objectSid'][0])
     # get all users with primaryGroupID of gid
     response = get_all(conn, search_base, '(&(objectCategory=user)(primaryGroupID={}))'.format(gid),
@@ -208,10 +209,8 @@ def get_users_in_group(conn, search_base, group):
 
 def get_user_info(conn, search_base, user):
     user_dn = get_user_dn(conn, search_base, user)
-    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=['allowedAttributes'])
-    allowed = set([a.lower() for a in conn.response[0]['attributes']['allowedAttributes']])
-    attrs = [a for a in USER_ATTRIBUTES if a.lower() in allowed]
-    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)), attributes=attrs)
+    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)),
+                attributes=list(USER_ATTRIBUTES))
     return conn.response
 
 

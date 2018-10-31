@@ -26,6 +26,7 @@ def print_user(user, conn, args):
     print('DisplayName              ', ' '.join(a['displayName']))
     print('E-mail                   ', ' '.join(a['mail']))
     print('JobTitle                 ', ' '.join(a['title']))
+    #print('nTSecurityDescriptor     ', get_attr(a, 'nTSecurityDescriptor', '-'))
     try:
         print('SID                      ', sid_to_str(a['objectSid'][0]))
     except:
@@ -67,8 +68,10 @@ def print_user(user, conn, args):
             primary_group = [g['dn'] for g in groups if struct.unpack(
                 '<H', g['attributes']['objectSid'][0][-4:-2])[0] == int(a['primaryGroupID'][0])][0]
             print('PrimaryGroup              "{}"'.format(primary_group if args.dn else cn(primary_group)))
-            # group scopes: https://technet.microsoft.com/en-us/library/cc755692.aspx
+            # group scopes:
+            # https://technet.microsoft.com/en-us/library/cc755692.aspx
             # http://www.harmj0y.net/blog/activedirectory/a-pentesters-guide-to-group-scoping/
+            # https://docs.microsoft.com/en-us/windows/security/identity-protection/access-control/active-directory-security-groups
             for g in groups:
                 logger.debug(hex(dw(int(g['attributes']['groupType'][0]))) + ' ' + cn(g['dn']))
             domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
@@ -77,8 +80,8 @@ def print_user(user, conn, args):
             print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), domain_local_groups)))
             print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), global_groups)))
             print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), universal_groups)))
-        except:
-            pass
+        except Exception as e:
+            logger.error('Error user groups: '+str(e))
     print('')
 
 
