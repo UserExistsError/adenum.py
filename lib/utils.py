@@ -28,10 +28,10 @@ def get_tcp_socket(addr):
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
     # or primaryGroupID = 516 (GROUP_RID_CONTROLLERS)
     search_base = 'OU=Domain Controllers,'+search_base
-    conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.SUBTREE,
+    response = conn.searchg(search_base, '(objectCategory=computer)', search_scope=ldap3.SUBTREE,
                 attributes=['dNSHostName', 'objectSid'])
     servers = []
-    for s in conn.response:
+    for s in response:
         hostname = s['attributes']['dNSHostName'][0]
         addr = get_addr_by_host(hostname, name_server, timeout) or \
                get_addr_by_host(hostname, conn.server.host, timeout)
@@ -122,26 +122,26 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
     ''' get the hosts domain, fully qualified, any way we can. try SMB first since all
     domain controllers should have 445 open. also, if you are forwarding your connection,
     this method will get the correct hostname. aborts for 127. ips if SMB fails '''
+    is_loopback = addr.startswith('127.') or addr == '::1'
+    if not is_loopback:
+        if None not in name_servers:
+            name_servers.append(None) # use default name server
+        logger.debug('Getting domain for {} by DNS'.format(addr))
+        for ns in name_servers:
+            fqdn = get_fqdn_by_addr(addr, ns, timeout)
+            if fqdn:
+                return fqdn
+        if conn and args:
+            logger.debug('Getting domain for {} by LDAP'.format(addr))
+            info = get_dc_info(args, conn)
+            try:
+                return info['dnsHostName']
+            except:
+                pass
     logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
     info = get_smb_info(addr, timeout, port)
     if info and info.get('dns_name', None):
         return info.get('dns_name')
-    if addr.startswith('127.'):
-        raise ValueError('Cannot do name lookup on 127 addresses')
-    if None not in name_servers:
-        name_servers.append(None) # use default name server
-    logger.debug('Getting domain for {} by DNS'.format(addr))
-    for ns in name_servers:
-        fqdn = get_fqdn_by_addr(addr, ns, timeout)
-        if fqdn:
-            return fqdn
-    if conn and args:
-        logger.debug('Getting domain for {} by LDAP'.format(addr))
-        info = get_dc_info(args, conn)
-        try:
-            return info['dnsHostName']
-        except:
-            pass
     return None
 
 class NegotiateFlags(LittleEndianStructure):

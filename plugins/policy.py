@@ -37,7 +37,7 @@ def handler(args, conn):
         print('Precedence                     ', a['msDS-PasswordSettingsPrecedence'][0])
         print('Applies to')
         for dn in a['msDS-PSOAppliesTo']:
-            print('\t'+dn) if args.dn else print('\t'+cn(dn))
+            print('    '+dn) if args.dn else print('    '+cn(dn))
         print('')
 
 

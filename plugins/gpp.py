@@ -101,9 +101,9 @@ def handler(args, conn):
                                 if len(creds):
                                     print('File:', get)
                                     for c in creds:
-                                        print('\tUser    "{}"'.format(c['user']))
-                                        print('\tPass    "{}"'.format(c['pass']))
-                                        print('\tChanged  {}'.format(c['changed']))
+                                        print('    User    "{}"'.format(c['user']))
+                                        print('    Pass    "{}"'.format(c['pass']))
+                                        print('    Changed  {}'.format(c['changed']))
                                         print()
     conn.close()
 

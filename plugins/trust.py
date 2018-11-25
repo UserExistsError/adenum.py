@@ -35,8 +35,8 @@ def handler(args, conn):
     }
     attributes=['trustAttributes', 'trustAuthIncoming', 'trustAuthOutgoing', 'trustDirection',
                 'trustPartner', 'trustType', 'securityIdentifier']
-    conn.search(args.search_base, '(objectClass=trustedDomain)', attributes=attributes)
-    for r in conn.response:
+    response = conn.searchg(args.search_base, '(objectClass=trustedDomain)', attributes=attributes)
+    for r in response:
         print('Partner     ', r['attributes']['trustPartner'][0])
         print('PartnerDN   ', r['dn'])
         print('PartnerSID  ', sid_to_str(r['attributes']['securityIdentifier'][0]))

@@ -23,62 +23,17 @@ DESCRIPTION = 'Enumerate ActiveDirectory users, groups, computers, and password 
 
 logger = logging.getLogger(__name__)
 
-'''
-= SUMMARY =
-
-This script is basically a python implementation of the windows "net" command.
-It provides enumeration of users, groups, and password policies by performing
-LDAP queries against an Active Directory domain controller.
-
-= INSTALLATION =
-
-You'll need to install ldap3 and dnspython:
-    pip3 install ldap3 dnspython
-
-You will also need either smbclient or pysmb to read the default password policy
-from the SYSVOL share.
-
-= EXAMPLES =
-
-NOTE: If your system is not configured to use the name server for
-the domain, you must specify the domain controller with -s or the
-domain's name server with --name-server. In nearly all AD domains,
-the domain controller acts as the name server. Domains specified
-with -d must be fully qualified.
-
-List password policies. Non-default policies may require higher privileges.
-    python3 adenum.py -u USER -P -d mydomain.local policy
-
-List all users and groups
-    python3 adenum.py -u USER -P -d mydomain.local users
-    python3 adenum.py -u USER -P -d mydomain.local groups
-
-List domain admins
-    python3 adenum.py -u USER -P -d mydomain.local group "domain admins"
-
-List domain joined computers. Add -r and -u to resolve hostnames and get uptime (SMB2 only).
-    python3 adenum.py -u USER -P -d mydomain.local computers
-
-= TODO =
-1. Find a better workaround for AD 1000 results limit on DCs that don't support paging
-2. Prioritize name resolution methods that work
-
-= RESOURCES =
-
-All defined AD attributes
-https://msdn.microsoft.com/en-us/library/ms675090(v=vs.85).aspx
-'''
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
     user_parser = parser.add_mutually_exclusive_group()
-    user_parser.add_argument('-u', '--username', default='', help='may specify DOMAIN\\USER. default is null user')
-    user_parser.add_argument('--anonymous', action='store_true', help='anonymous access')
-    parser.add_argument('-p', '--password', default=hashlib.new('md4', b'').hexdigest(), help='password')
+    user_parser.add_argument('-u', '--username', help='may specify DOMAIN\\USER. if no user specified, use anonymous auth')
+    user_parser.add_argument('--anonymous', action='store_true', help='anonymous access. default if no user specified')
+    parser.add_argument('-p', '--password', help='password')
     parser.add_argument('--nthash', action='store_true', help='password is an NTLM hash')
-    parser.add_argument('-P', dest='prompt', action='store_true', help='prompt for password')
     parser.add_argument('--proxy', help='socks5 proxy: eg 127.0.0.1:8888')
     parser.add_argument('-s', '--server', help='domain controller address or name')
+    parser.add_argument('--session', default='', help='session database')
     parser.add_argument('-d', '--domain', help='user domain. may be different than domain of --server (trusts)')
     parser.add_argument('--timeout', type=int, default=TIMEOUT, help='timeout for network operations')
     parser.add_argument('--threads', type=int, default=20, help='name resolution/smbinfo worker count. default 20')
@@ -91,12 +46,13 @@ if __name__ == '__main__':
     parser.add_argument('--name-server', dest='name_server', help='specify name server for domain')
     parser.add_argument('--dn', action='store_true', help='list distinguished names of AD objects')
     parser.add_argument('--insecure', action='store_true', help='ignore invalid tls certs')
+    parser.add_argument('-i', '--info', action='store_true', help='print server ldap information')
     #parser.add_argument('--cert', help='')
     #parser.add_argument('--auth', default='ntlm', type=str.lower, choices=['ntlm', 'kerb'], help='auth type')
     parser.set_defaults(search_base=None)
     parser.set_defaults(server_domain=None) # domain of server being queried
     parser.set_defaults(server_fqdn=None)
-    parser.set_defaults(handler=None)
+    parser.set_defaults(handler=lambda *args: print('run again with -h'))
 
     tls_group = parser.add_mutually_exclusive_group()
     tls_group.add_argument('--tls', action='store_true', help='initiate connection with TLS')
@@ -123,6 +79,9 @@ if __name__ == '__main__':
             l.setLevel(logging.INFO)
             l.addHandler(h)
 
+    if args.username is None:
+        args.anonymous = True
+
     for p in plugin_list:
         logger.debug('Loaded Plugin: '+p.PLUGIN_NAME)
 
@@ -140,7 +99,7 @@ if __name__ == '__main__':
             print('Error: Failed to resolve DC hostname')
             sys.exit()
 
-    if args.username.find('\\') != -1:
+    if args.username and args.username.find('\\') != -1:
         if args.domain:
             args.username = args.username.split('\\')[-1]
         else:
@@ -173,7 +132,7 @@ if __name__ == '__main__':
         if fqdn:
             args.domain = fqdn.split('.', maxsplit=1)[-1]
         if not args.domain:
-            print('Error: Failed to get domain. Try supplying one with --domain.')
+            print('Error: Failed to get domain. Try supplying one with --d, --domain.')
             sys.exit()
         logger.info('Found domain: '+args.domain)
 
@@ -195,7 +154,8 @@ if __name__ == '__main__':
         logger.info('Found a domain controller for {} at {}'.format(args.domain, args.server))
 
     # get search base. should be root of DC being queried
-    args.server_fqdn = addr_to_fqdn(args.server, [args.name_server, args.server], port=args.smb_port, timeout=args.timeout)
+    name_servers = [args.name_server, args.server] if args.name_server else [args.server]
+    args.server_fqdn = addr_to_fqdn(args.server, name_servers, port=args.smb_port, timeout=args.timeout)
     if args.server_fqdn:
         args.hostname = args.server_fqdn.split('.', maxsplit=1)[0]
         args.server_domain = args.server_fqdn.split('.', maxsplit=1)[-1]
@@ -208,7 +168,7 @@ if __name__ == '__main__':
     logger.debug('Port       '+str(args.port))
     logger.debug('Username   {}\\{}'.format(args.domain, args.username))
     logger.debug('SearchBase '+args.search_base)
-    logger.debug('NameServer '+ (args.name_server or 'default'))
+    logger.debug('NameServer '+ (args.name_server or args.server or 'default'))
     if not is_private_addr(args.server) and not args.insecure:
         raise Warning('Aborting due to public LDAP server. use --insecure to override')
 
@@ -223,3 +183,6 @@ if __name__ == '__main__':
         setattr(conn, 'default_search_base', args.search_base)
         args.handler(args, conn)
     conn.unbind()
+
+    logger.debug('ldap queries {}'.format(conn.query_count))
+    logger.debug('cache hits   {}'.format(conn.cache_hits))

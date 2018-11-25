@@ -96,8 +96,8 @@ def handler(args, conn):
         users.extend([u.strip() for u in open(args.userfile)])
     for user in set(users):
         try:
-            u = get_user_info(conn, args.search_base, user)[0]
-        except:
+            u = list(get_user_info(conn, args.search_base, user))[0]
+        except IndexError:
             logger.error('Failed to find user: '+user)
             continue
         print_user(u, conn, args)

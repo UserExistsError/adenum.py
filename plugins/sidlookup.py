@@ -12,8 +12,8 @@ def handler(args, conn):
     for s in args.sids:
         sid_hex = sid_to_ldap(str_to_sid(s))
         sidstr += '(objectSid={})'.format(sid_hex)
-    conn.search(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn', 'objectCategory'])
-    for r in conn.response:
+    response = conn.searchg(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn', 'objectCategory'])
+    for r in response:
         a = r['attributes']
         if args.dn:
             name = r['dn']

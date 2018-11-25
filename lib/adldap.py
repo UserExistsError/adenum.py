@@ -67,26 +67,19 @@ USER_ATTRIBUTES=[
         'nTSecurityDescriptor',
     ]
 
-# chars to escape for Active Directory
-escape_trans = str.maketrans(
-    {'*': r'\2a',
-     '(': r'\28',
-     ')': r'\29',
-     '\\': r'\5c',
-     '\x00': r'\00',
-     '/': r'\2f'})
-
 def escape(s):
     ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
     return ldap3.utils.conv.escape_filter_chars(s)
 
 def get_all(conn, search_base, simple_filter, attributes=[]):
-    # TODO determine if dc supports paging
-    return get_all_paged(conn, search_base, simple_filter, attributes)
+    if conn.is_paged():
+        return get_all_paged(conn, search_base, simple_filter, attributes)
+    logger.warning('Paging is not supported: using unstable wildcard search')
+    return get_all_wildcard(conn, search_base, simple_filter, attributes)
 
 def get_all_paged(conn, search_base, simple_filter, attributes=[]):
     ''' Fetch all results with paging. Not all DCs support this '''
-    return conn.search(search_base, simple_filter, attributes=attributes, paged_size=MAX_PAGE_SIZE)
+    return conn.searchg(search_base, simple_filter, attributes=attributes, paged_size=MAX_PAGE_SIZE)
 
 def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
     ''' TODO this is broken
@@ -101,7 +94,7 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
     results = []
     while 1:
         f = ft.format(simple_filter, l, r)
-        response = conn.search(search_base, f, attributes=attributes)
+        response = conn.searchg(search_base, f, attributes=attributes)
         if conn.result['result'] == 4:
             # reached max results
             if cs.index(l) == cs.index(r) + 1:
@@ -115,23 +108,24 @@ def get_all_wildcard(conn, search_base, simple_filter, attributes=[]):
         elif r == cs[-1]:
             # get any remaining 'z' results
             results.extend(response)
-            conn.search(search_base, '(&{}(!(cn<=z)))'.format(simple_filter), attributes=attributes)
+            conn.searchg(search_base, '(&{}(!(cn<=z)))'.format(simple_filter), attributes=attributes)
             results.extend(response)
             break
         else:
-            results.extend(conn.response)
+            results.extend(response)
             ft = '(&{}(!(cn<={}))(cn<={}))'
             l = r
             r = cs[-1]
     return results
 
 
-def get_users(conn, search_base, basic=False):
+def get_users(conn, search_base, active_only=False):
     ''' get all domain users '''
     attrs = list(USER_ATTRIBUTES)
-    if basic:
-        attrs = ['userPrincipalName', 'samAccountName', 'objectSid', 'distinguishedName', 'memberOf']
-    return get_all(conn, search_base, '(objectCategory=user)', attributes=attrs)
+    filt = '(objectCategory=user)'
+    if active_only:
+        filt = '(&(objectCategory=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))'
+    return get_all(conn, search_base, filt, attributes=attrs)
 
 def get_groups(conn, search_base):
     ''' get all domain groups '''
@@ -146,10 +140,10 @@ def get_groups(conn, search_base):
 def get_computer(conn, search_base, hostname, attributes=[]):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
     if '.' in hostname:
-        conn.search(search_base, '(&(objectCategory=computer)(dNSHostname={}))'.format(hostname), attributes=attributes)
+        response = conn.searchg(search_base, '(&(objectCategory=computer)(dNSHostname={}))'.format(hostname), attributes=attributes)
     else:
-        conn.search(search_base, '(&(objectCategory=computer)(cn={}))'.format(hostname), attributes=attributes)
-    return conn.response[0]
+        response = search(search_base, '(&(objectCategory=computer)(cn={}))'.format(hostname), attributes=attributes)
+    return list(response)[0]
 
 def get_computers(conn, search_base, attributes=[], basic=False):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
@@ -159,17 +153,18 @@ def get_computers(conn, search_base, attributes=[], basic=False):
     return [g for g in results if g.get('dn', None)]
 
 def get_user_dn(conn, search_base, user):
-    conn.search(search_base, '(&(objectCategory=user)(|(userPrincipalName={}@*)(cn={})(samAccountName={})))'.format(user, user, user))
-    return conn.response[0]['dn']
+    response = conn.searchg(search_base, '(&(objectCategory=user)(|(userPrincipalName={}@*)(cn={})(samAccountName={})))'.format(user, user, user))
+    return list(response)[0]['dn']
 
 def get_user_groups(conn, search_base, user):
     ''' get all groups for user, domain and local. see groupType attribute to check domain vs local.
     user should be a dn. '''
-    conn.search(search_base, '(&(objectCategory=User)(distinguishedName='+user+'))', attributes=['memberOf', 'primaryGroupID'])
-    group_dns = conn.response[0]['attributes']['memberOf']
+    response = conn.searchg(search_base, '(&(objectCategory=User)(distinguishedName='+user+'))', attributes=['memberOf', 'primaryGroupID'])
+    response = list(response)
+    group_dns = response[0]['attributes']['memberOf']
 
     # get primary group which is not included in the memberOf attribute
-    pgid = int(conn.response[0]['attributes']['primaryGroupID'][0])
+    pgid = int(response[0]['attributes']['primaryGroupID'][0])
     groups = get_groups(conn, search_base)
     for g in groups:
         # Builtin group SIDs are returned as str's, not bytes
@@ -181,13 +176,15 @@ def get_user_groups(conn, search_base, user):
     return [g for g in groups if g['dn'].lower() in group_dns]
 
 def get_users_in_group(conn, search_base, group):
-    ''' return all members of group '''
+    ''' return all members of group
+    TODO: recurse into member groups. for now, just treat like a user. '''
     if group.find('=') > 0:
-        response = conn.search(search_base, '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
-                    attributes=['objectSid', 'distinguishedName'])
+        response = conn.searchg(search_base, '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
+                               attributes=['objectSid', 'distinguishedName'])
     else:
-        response = conn.search(search_base, '(&(objectCategory=Group)(cn={}))'.format(group),
-                    attributes=['objectSid', 'distinguishedName'])
+        response = conn.searchg(search_base, '(&(objectCategory=Group)(cn={}))'.format(group),
+                               attributes=['objectSid', 'distinguishedName'])
+    response = list(response)
     if len(response) == 0:
         logger.error('Group does not exist: '+group)
         raise ValueError('Group does not exist: '+group)
@@ -202,16 +199,16 @@ def get_users_in_group(conn, search_base, group):
 
     users = [u for u in response if u.get('dn', False)]
     # get all users in group using "memberOf" attribute. primary group is not included in the "memberOf" attribute
-    response = get_all(conn, search_base, '(&(objectCategory=user)(memberOf='+group['dn']+'))', attributes=['distinguishedName', 'userPrincipalName'])
+    response = get_all(conn, search_base, '(&(|(objectCategory=user)(objectCategory=group))(memberOf={}))'.format(group['dn']),
+                       attributes=['distinguishedName', 'userPrincipalName'])
     users += [u for u in response if u.get('dn', False)]
     return users
 
 
 def get_user_info(conn, search_base, user):
     user_dn = get_user_dn(conn, search_base, user)
-    conn.search(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)),
-                attributes=list(USER_ATTRIBUTES))
-    return conn.response
+    return conn.searchg(search_base, '(&(objectCategory=user)(distinguishedName={}))'.format(escape(user_dn)),
+                       attributes=list(USER_ATTRIBUTES))
 
 
 def get_dc_info(args, conn=None):
@@ -221,7 +218,7 @@ def get_dc_info(args, conn=None):
     conn.search('', '(objectClass=*)', search_scope=ldap3.BASE, dereference_aliases=ldap3.DEREF_NEVER,
                 attributes=['dnsHostName', 'supportedLDAPVersion', 'rootDomainNamingContext',
                             'domainFunctionality', 'forestFunctionality', 'domainControllerFunctionality',
-                            'defaultNamingContext'])
+                            'defaultNamingContext', 'supportedLDAPPolicies'])
     r = conn.response[0]['raw_attributes']
     for a in r:
         if a == 'supportedLDAPVersion':

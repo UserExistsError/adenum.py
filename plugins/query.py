@@ -19,8 +19,7 @@ def get_parser():
     return g_parser
 
 def custom_query(conn, base, _filter, scope=ldap3.SUBTREE, attrs=None):
-    conn.search(base, _filter, search_scope=scope, attributes=attrs)
-    return conn.response
+    return conn.searchg(base, _filter, search_scope=scope, attributes=attrs)
 
 def handler(args, conn):
     if args.examples:
@@ -51,8 +50,8 @@ def handler(args, conn):
         # range doesn't seem to work...
         response = custom_query(conn, base, args.filter, scope=scope, attrs=['allowedAttributes', 'range=0-1'])
         print('AllowedAttributes')
-        for a in conn.response[0]['attributes']['allowedAttributes']:
-            print('\t', a)
+        for a in list(response)[0]['attributes']['allowedAttributes']:
+            print('    ', a)
         return
 
     response = custom_query(conn, base, args.filter, scope=scope, attrs=args.attributes)

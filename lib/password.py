@@ -78,13 +78,14 @@ def get_default_pwd_policy(args, conn):
         return None
     ldap_props = {}
     if conn:
-        conn.search('cn=Policies,cn=System,'+args.search_base, '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
-                    attributes=['gPCFileSysPath'])
-        gpo_path = conn.response[0]['attributes']['gPCFileSysPath'][0]
-        conn.search(args.search_base, '(distinguishedName={})'.format(args.search_base,), ldap3.BASE,
-                    attributes=ldap_attrs)
+        response = list(conn.searchg('cn=Policies,cn=System,'+args.search_base,
+                               '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
+                               attributes=['gPCFileSysPath']))
+        gpo_path = response[0]['attributes']['gPCFileSysPath'][0]
+        response = conn.searchg(args.search_base, '(distinguishedName={})'.format(args.search_base,), ldap3.BASE,
+                               attributes=ldap_attrs)
         try:
-            ldap_props = conn.response[0]['attributes']
+            ldap_props = response[0]['attributes']
         except:
             pass
         # ldap stores ints differently than the .inf in sysvol
@@ -148,13 +149,13 @@ def get_pwd_policy(conn, search_base):
         'msDS-LockoutThreshold',   # login failures allowed within the window
         'msDS-LockoutObservationWindow', # time window where failed auths are counted
         'msDS-LockoutDuration', # how long to lock user account after too many failed auths
-        'msDS-PSOAppliesTo',    # dn's of affected users
+        'msDS-PSOAppliesTo',    # dn's of affected users/groups
         'msDS-PasswordSettingsPrecedence', # used to assign precedence when a user is member of multiple policies
     ]
     # grab all objects directly under the search base
-    conn.search(base, '(objectCategory=*)', attributes=attrs, search_scope=ldap3.LEVEL)
+    raw_response = conn.searchg(base, '(objectCategory=*)', attributes=attrs, search_scope=ldap3.LEVEL)
     response = []
-    for r in conn.response:
+    for r in raw_response:
         if not r['dn'].lower().startswith('cn=password settings container,'):
             response.append(r)
     return response

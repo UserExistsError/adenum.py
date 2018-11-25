@@ -26,13 +26,13 @@ def computer_info(computer, args):
         hostname = computer['attributes']['name'][0]
 
     info = ''
-    if args.resolve or args.smbinfo or args.alive:
+    if args.resolve or args.smbinfo or args.active:
         for name_server in set([args.name_server, args.server, None]):
             addr = get_addr_by_host(hostname, name_server, args.timeout)
             if addr:
                 break
         if addr:
-            if args.alive and not ping_host(addr, args.timeout):
+            if args.active and not ping_host(addr, args.timeout):
                 logger.debug('Host '+addr+' is down')
                 return
             info = 'Address: {}\n'.format(addr)
@@ -41,7 +41,7 @@ def computer_info(computer, args):
                 if smbinfo:
                     for k in sorted(smbinfo.keys()):
                         info += '{}: {}\n'.format(k, smbinfo[k])
-        elif args.alive:
+        elif args.active:
             logger.debug('Host '+addr+' may be down')
             return
     for a in sorted(computer['attributes'].keys()):
@@ -73,8 +73,8 @@ def get_arg_parser(subparser):
         g_parser.set_defaults(computers=[])
         g_parser.add_argument('-s', '--smbinfo', action='store_true', help='run smbinfo on each host')
         g_parser.add_argument('-r', '--resolve', action='store_true', help='resolve hostnames')
-        g_parser.add_argument('-a', '--attributes', default=[], type=lambda x:x.split(','),
+        g_parser.add_argument('--attributes', default=[], type=lambda x:x.split(','),
                               help='additional attributes to retrieve')
-        g_parser.add_argument('--alive', action='store_true', help='only show alive hosts')
+        g_parser.add_argument('-a', '--active', action='store_true', help='only show active hosts')
         g_parser.add_argument('--basic', action='store_true', help='get basic computer info')
     return g_parser

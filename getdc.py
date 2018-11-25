@@ -29,7 +29,7 @@ if not args.domain:
             args.domain = name.split('.', maxsplit=1)[-1]
 
 if not args.domain:
-    print('Error: must specify a domain')
+    print('Error: must specify a domain with -d')
     sys.exit()
 
 for dc in get_domain_controllers_by_dns(args.domain, args.name_server):

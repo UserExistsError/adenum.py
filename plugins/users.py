@@ -10,9 +10,18 @@ g_parser = None
 
 def handler(args, conn):
     if args.privileged:
-        # see https://adsecurity.org/?p=3658
-        priv_groups = ['domain admins', 'enterprise admins', 'account operators', 'schema admins',
-                       'backup operators', 'administrators', 'DnsAdmins', 'RODC Admins']
+        # see https://adsecurity.org/?p=3658 and https://adsecurity.org/?p=3700
+        priv_groups = [
+            'domain admins', 'enterprise admins',
+            'administrators',
+            'account operators',
+            'schema admins',
+            'backup operators', # bypass file permissions
+            'DnsAdmins',        # load dll on dc
+            'RODC Admins',
+            'server operators',
+            'print operators'   # driver loading
+        ]
         groups = set()
         for g in get_groups(conn, args.search_base):
             if 'admin' in g['dn'].lower() or g['dn'].split(',', maxsplit=1)[0][3:].lower() in priv_groups:
@@ -34,7 +43,7 @@ def handler(args, conn):
             print()
             # get accounts that can replicate the DC
     else:
-        users = get_users(conn, args.search_base, args.basic)
+        users = get_users(conn, args.search_base, args.active)
         for u in users:
             if args.basic:
                 if 'dn' in u:
@@ -67,4 +76,5 @@ def get_arg_parser(subparser):
         g_parser.set_defaults(handler=handler)
         g_parser.add_argument('-p', '--privileged', action='store_true', help='list privileged users')
         g_parser.add_argument('--basic', action='store_true', help='get basic user info')
+        g_parser.add_argument('-a', '--active', action='store_true', help='get active users only')
     return g_parser

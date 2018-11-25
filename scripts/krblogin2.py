@@ -47,7 +47,7 @@ if __name__ == '__main__':
     #hash_group = parser.add_mutually_exclusive_group()
     #hash_group.add_argument('--nthash', action='store_true', default='', help='pass NT hash as password')
     #hash_group.add_argument('--lmhash', action='store_true', default='', help='pass LM hash as password')
-    parser.add_argument('-d', '--domain', default='.')
+    parser.add_argument('-d', '--domain', required=True)
     #parser.add_argument('-w', '--threads', type=int, default=1, help='default 1')
     parser.add_argument('-t', '--timeout', type=int, default=3, help='socket timeout. default 3s')
     parser.add_argument('-f', '--file', help='[domain\\]user pass file')

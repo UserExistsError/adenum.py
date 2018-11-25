@@ -8,8 +8,9 @@ PLUGIN_NAME='fsp'
 g_parser = None
 
 def handler(args, conn):
-    conn.search(args.search_base, '(objectClass=foreignSecurityPrincipal)', attributes=[], search_scope=ldap3.SUBTREE)
-    for r in conn.response:
+    response = conn.searchg(args.search_base, '(objectClass=foreignSecurityPrincipal)',
+                           attributes=[], search_scope=ldap3.SUBTREE)
+    for r in response:
         print(r['dn'])
 
 def get_parser():
