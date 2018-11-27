@@ -5,6 +5,7 @@ import logging
 import hashlib
 import getpass
 
+import lib.security
 from lib.config import TIMEOUT, MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
@@ -138,5 +139,5 @@ def get_connection(args, addr=None, conn_class=CachingConnection):
     conn.open()
     if args.starttls:
         conn.start_tls()
-    conn.bind()
+    conn.bind(controls=[lib.security.get_ldap_control()])
     return conn
