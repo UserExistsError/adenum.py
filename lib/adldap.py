@@ -78,7 +78,7 @@ escape_trans = str.maketrans(
 
 def escape(s):
     ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
-    return s.translate(escape_trans)
+    return ldap3.utils.conv.escape_filter_chars(s)
 
 def get_all(conn, search_base, simple_filter, attributes=[]):
     # TODO determine if dc supports paging

@@ -74,9 +74,11 @@ def print_user(user, conn, args):
             # https://docs.microsoft.com/en-us/windows/security/identity-protection/access-control/active-directory-security-groups
             for g in groups:
                 logger.debug(hex(dw(int(g['attributes']['groupType'][0]))) + ' ' + cn(g['dn']))
-            domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
+            #builtin_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x1]
             global_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x2]
+            domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
             universal_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x8]
+            #print('BuiltinGroups            ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), builtin_groups)))
             print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), domain_local_groups)))
             print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), global_groups)))
             print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), universal_groups)))

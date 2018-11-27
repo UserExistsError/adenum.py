@@ -26,6 +26,7 @@ def get_tcp_socket(addr):
     return s
 
 def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
+    # or primaryGroupID = 516 (GROUP_RID_CONTROLLERS)
     search_base = 'OU=Domain Controllers,'+search_base
     conn.search(search_base, '(objectCategory=computer)', search_scope=ldap3.SUBTREE,
                 attributes=['dNSHostName', 'objectSid'])
@@ -354,6 +355,8 @@ def get_smb_info(addr, timeout=TIMEOUT, port=445):
         logger.debug('SMB Status: 0x{:08x}'.format(status))
         if status == 0xc0000002: #STATUS_NOT_IMPLEMENTED. expect 0xc0000016 STATUS_MORE_PROCESSING_REQUIRED
             logger.error('Host does not support NTLM auth')
+        elif status == 0xc0000022: # NTSTATUS_ACCESS_DENIED. non-standard Windows configuration?
+            logger.error('Access denied')
         else:
             native_offset = 47 + struct.unpack('<H', data[43:45])[0]
             # align to 16 bits
