@@ -47,7 +47,7 @@ class CachingConnection(ldap3.Connection):
 
     class SearchResponse:
         ''' query response object. returns generator with 1 result per call '''
-        def __init__(self, conn, key, page_size=10):
+        def __init__(self, conn, key, page_size=MAX_PAGE_SIZE):
             self.conn = conn
             self.key = key
             self.page_size = page_size
