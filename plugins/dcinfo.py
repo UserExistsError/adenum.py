@@ -1,8 +1,8 @@
 import logging
-from lib.adldap import *
-from lib.convert import *
-from lib.utils import *
-from lib.connection import *
+
+import ad.dc
+import ad.connection
+from ad.convert import sid_to_str
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,11 @@ def handler(args, conn):
         6:'2012r2',
         7:'2016',
     }
-    servers = get_domain_controllers_by_ldap(get_connection(args), args.search_base, args.name_server, args.timeout)
+    servers = ad.dc.get_domain_controllers_by_ldap(ad.connection.get(args), args.search_base, args.name_server, args.timeout)
     for s in servers:
         logger.debug('Connecting to DC {} ({})'.format(s['hostname'], s['address']))
         try:
-            r = get_dc_info(args, get_connection(args, s['address']))
+            r = ad.dc.get_info(args, ad.connection.get(args, s['address']))
         except:
             logger.error('DC connection failed: {} ({})'.format(s['hostname'], s['address']))
             continue

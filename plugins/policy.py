@@ -1,7 +1,6 @@
 import logging
-from lib.adldap import *
-from lib.convert import *
-from lib.password import *
+
+import ad.password
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +12,7 @@ def get_parser():
 
 def handler(args, conn):
     print('= Default Domain Policy =')
-    pol = get_default_pwd_policy(args, conn)
+    pol = ad.password.get_default_pass_policy(args, conn)
     if pol:
         for k in sorted(pol.keys()):
             print('{:30s} {}'.format(k, pol[k]))
@@ -22,7 +21,7 @@ def handler(args, conn):
     print('')
     # sort policies by precedence. precedence is used to determine which policy applies to a user
     # when multiple policies are applied to him/her
-    pols = sorted(get_pwd_policy(conn, args.search_base), key=lambda p:int(p['attributes']['msDS-PasswordSettingsPrecedence'][0]))
+    pols = sorted(ad.password.get_pass_policy(conn, args.search_base), key=lambda p:int(p['attributes']['msDS-PasswordSettingsPrecedence'][0]))
     for a in [p['attributes'] for p in pols]:
         print('=', a['name'][0].title(), '=')
         print('ComplexityEnabled              ', a['msDS-PasswordComplexityEnabled'][0])

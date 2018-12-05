@@ -1,7 +1,7 @@
 import ldap3
 import logging
-from lib.adldap import *
-from lib.convert import *
+
+from ad.convert import escape
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,14 @@ EXAMPLES='''
 def get_parser():
     return g_parser
 
-def custom_query(conn, base, _filter, scope=ldap3.SUBTREE, attrs=None):
+def custom_query(conn, base, _filter, scope=ldap3.SUBTREE, attrs=[]):
     return conn.searchg(base, _filter, search_scope=scope, attributes=attrs)
 
 def handler(args, conn):
+    if args.escape:
+        print('Input:   ', args.escape)
+        print('Escaped: ', escape(args.escape))
+        return
     if args.examples:
         print('Examples')
         print(EXAMPLES)
@@ -73,6 +77,7 @@ def get_arg_parser(subparser):
         g_parser.add_argument('-f', '--filter', help='search filter')
         g_parser.add_argument('-s', '--scope', type=str.lower,  default='base', choices=['base', 'level', 'subtree'], help='search scope')
         g_parser.add_argument('--allowed', action='store_true', help='retrieve allowed atrributes')
-        g_parser.add_argument('-e', '--examples', action='store_true', help='show examples')
+        g_parser.add_argument('--examples', action='store_true', help='show examples')
+        g_parser.add_argument('-e', '--escape', help='escape string and exit')
         g_parser.add_argument('attributes', default=[], nargs='*', help='attributes to retrieve')
     return g_parser

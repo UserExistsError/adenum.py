@@ -1,13 +1,12 @@
-import os, binascii
+import os
 import io
-import logging
 import base64
+import logging
+import binascii
 import tempfile
 import xml.etree.ElementTree as ET
 
-from lib.adldap import *
-from lib.convert import *
-from lib.password import MyMD4Class
+from ad.password import MyMD4Class
 
 import smb
 from smb.SMBConnection import SMBConnection

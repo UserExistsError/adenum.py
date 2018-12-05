@@ -3,10 +3,11 @@ import sys
 import logging
 import concurrent.futures
 
-from lib.adldap import *
-from lib.convert import *
-from lib.names import *
-from lib.utils import *
+import ad.computer
+import net.name
+from net.util import ping_host
+from ad.adsmb import get_smb_info
+from ad.convert import get_attr, ft_to_str, gt_to_str, dn_to_cn
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ def computer_info(computer, args):
     info = ''
     if args.resolve or args.smbinfo or args.active:
         for name_server in set([args.name_server, args.server, None]):
-            addr = get_addr_by_host(hostname, name_server, args.timeout)
+            addr = net.name.get_addr_by_host(hostname, name_server, args.timeout)
             if addr:
                 break
         if addr:
@@ -54,16 +55,22 @@ def computer_info(computer, args):
     if args.dn:
         sys.stdout.write('dn: '+computer['dn'] + os.linesep + info + os.linesep)
     else:
-        sys.stdout.write('cn: '+cn(computer['dn']) + os.linesep + info + os.linesep)
+        sys.stdout.write('cn: '+dn_to_cn(computer['dn']) + os.linesep + info + os.linesep)
+
+def computer_info_wrapper(computer, args):
+    try:
+        computer_info(computer, args)
+    except Exception as e:
+        logger.error('Computer info {}: {}'.format(get_attr(computer, 'dNSHostName', ''), e))
 
 def handler(args, conn):
-    computers = get_computers(conn, args.search_base, args.attributes, args.basic)
+    computers = ad.computer.get_all(conn, args.search_base, attributes=args.attributes)
     if args.basic:
         for c in computers:
             print(c['attributes']['dNSHostName'][0], c['attributes']['distinguishedName'][0])
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.threads) as e:
-            concurrent.futures.wait([e.submit(computer_info, c, args) for c in computers])
+            concurrent.futures.wait([e.submit(computer_info_wrapper, c, args) for c in computers])
 
 def get_arg_parser(subparser):
     global g_parser

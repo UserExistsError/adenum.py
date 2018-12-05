@@ -1,6 +1,8 @@
+import struct
 import logging
-from lib.adldap import *
-from lib.convert import *
+
+import ad.user
+from ad.convert import sid_to_str, gt_to_str, timestr_or_never, get_attr, dn_to_cn, dw_to_i
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ def print_user(user, conn, args):
         print('UserName                 ', a.get('samAccountName', None)[0] or \
               a.get('userPrincipalName')[0].split('@')[0])
     except:
-        print('UserName                 ', cn(user['dn']))
+        print('UserName                 ', dn_to_cn(user['dn']))
     print('FullName                 ', get_attr(a, 'givenName', ''), get_attr(a, 'middleName', ''))
     print('DistinguishedName        ', a['distinguishedName'][0])
     print('UserPrincipalName        ', get_attr(a, 'userPrincipalName', ''))
@@ -64,25 +66,27 @@ def print_user(user, conn, args):
 
     if not args.basic:
         try:
-            groups = get_user_groups(conn, args.search_base, user['dn'])
+            groups = ad.user.get_groups(conn, args.search_base, user['dn'])
             primary_group = [g['dn'] for g in groups if struct.unpack(
                 '<H', g['attributes']['objectSid'][0][-4:-2])[0] == int(a['primaryGroupID'][0])][0]
-            print('PrimaryGroup              "{}"'.format(primary_group if args.dn else cn(primary_group)))
+            print('PrimaryGroup              "{}"'.format(primary_group if args.dn else dn_to_cn(primary_group)))
             # group scopes:
             # https://technet.microsoft.com/en-us/library/cc755692.aspx
             # http://www.harmj0y.net/blog/activedirectory/a-pentesters-guide-to-group-scoping/
             # https://docs.microsoft.com/en-us/windows/security/identity-protection/access-control/active-directory-security-groups
             for g in groups:
-                logger.debug(hex(dw(int(g['attributes']['groupType'][0]))) + ' ' + cn(g['dn']))
-            #builtin_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x1]
-            global_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x2]
-            domain_local_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x4]
-            universal_groups = [g['dn'] for g in groups if dw(int(g['attributes']['groupType'][0])) & 0x8]
-            #print('BuiltinGroups            ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), builtin_groups)))
-            print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), domain_local_groups)))
-            print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), global_groups)))
-            print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else cn(x)), universal_groups)))
+                logger.debug(hex(dw_to_i(int(g['attributes']['groupType'][0]))) + ' ' + dn_to_cn(g['dn']))
+            #builtin_groups = [g['dn'] for g in groups if dw_to_i(int(g['attributes']['groupType'][0])) & 0x1]
+            global_groups = [g['dn'] for g in groups if dw_to_i(int(g['attributes']['groupType'][0])) & 0x2]
+            domain_local_groups = [g['dn'] for g in groups if dw_to_i(int(g['attributes']['groupType'][0])) & 0x4]
+            universal_groups = [g['dn'] for g in groups if dw_to_i(int(g['attributes']['groupType'][0])) & 0x8]
+            #print('BuiltinGroups            ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else dn_to_cn(x)), builtin_groups)))
+            print('DomainLocalGroups        ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else dn_to_cn(x)), domain_local_groups)))
+            print('GlobalGroups             ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else dn_to_cn(x)), global_groups)))
+            print('UniversalGroups          ', ', '.join(map(lambda x:'"{}"'.format(x if args.dn else dn_to_cn(x)), universal_groups)))
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error('Error user groups: '+str(e))
     print('')
 
@@ -96,7 +100,7 @@ def handler(args, conn):
         users.extend([u.strip() for u in open(args.userfile)])
     for user in set(users):
         try:
-            u = list(get_user_info(conn, args.search_base, user))[0]
+            u = list(ad.user.get_info(conn, args.search_base, user))[0]
         except IndexError:
             logger.error('Failed to find user: '+user)
             continue

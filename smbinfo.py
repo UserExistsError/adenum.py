@@ -12,9 +12,9 @@ import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
-from lib.utils import get_smb_info
-from lib.inet import is_addr
-from lib.names import get_host_by_name
+from ad.adsmb import get_smb_info
+from net.util import is_addr
+from net.name import get_host_by_name
 
 def get_smb_info_thread(host, args):
     if is_addr(host):

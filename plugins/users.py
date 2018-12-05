@@ -1,7 +1,9 @@
 import logging
-from lib.adldap import *
-from lib.convert import *
-from plugins.user import print_user
+
+import ad.group
+import ad.user
+from ad.convert import sid_to_str
+from .user import print_user
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +25,12 @@ def handler(args, conn):
             'print operators'   # driver loading
         ]
         groups = set()
-        for g in get_groups(conn, args.search_base):
+        for g in ad.group.get_all(conn, args.search_base):
             if 'admin' in g['dn'].lower() or g['dn'].split(',', maxsplit=1)[0][3:].lower() in priv_groups:
                 groups.add(g['dn'])
         for g in sorted(groups):
             logger.debug('Getting users in "{}"'.format(g))
-            members = get_users_in_group(conn, args.search_base, g)
+            members = ad.group.get_users(conn, args.search_base, g)
             if len(members) == 0:
                 continue
             print('=', g if args.dn else cn(g), '=')
@@ -43,7 +45,7 @@ def handler(args, conn):
             print()
             # get accounts that can replicate the DC
     else:
-        users = get_users(conn, args.search_base, args.active)
+        users = ad.user.get_all(conn, args.search_base, active_only=args.active)
         for u in users:
             if args.basic:
                 if 'dn' in u:

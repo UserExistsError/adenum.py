@@ -5,8 +5,6 @@ import tempfile
 import collections
 import configparser
 
-from lib.convert import *
-
 logger = logging.getLogger(__name__)
 
 # password attributes as stored in
@@ -64,7 +62,7 @@ class MyMD4Class():
     def digest(self):
         return self.nthash
 
-def get_default_pwd_policy(args, conn):
+def get_default_pass_policy(args, conn):
     ''' ref https://msdn.microsoft.com/en-us/library/cc232769.aspx
     default password policy is what gets returned by "net accounts"
     The policy is stored as a GPO on the sysvol share. It's stored in an INI file.
@@ -133,7 +131,7 @@ def get_default_pwd_policy(args, conn):
                 props[name] = ldap_props[lname][0]
     return props
 
-def get_pwd_policy(conn, search_base):
+def get_pass_policy(conn, search_base):
     ''' return non-default password policies for the domain. user must have read access to
     policies in "Password Settings Container" '''
     base = 'cn=Password Settings Container,cn=System,'+search_base

@@ -3,8 +3,7 @@ import logging
 import ipaddress
 import dns.resolver
 
-from lib.config import TIMEOUT
-from lib.inet import *
+from config import TIMEOUT
 
 logger = logging.getLogger(__name__)
 

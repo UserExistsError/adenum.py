@@ -9,9 +9,31 @@ import getpass
 import sqlite3
 import threading
 
-from lib.config import TIMEOUT, MAX_PAGE_SIZE
+from config import TIMEOUT, MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
+
+class SearchResponse:
+    ''' query response object. returns generator with 1 result per call '''
+    def __init__(self, conn, key, page_size=MAX_PAGE_SIZE):
+        self.conn = conn
+        self.key = key
+        self.page_size = page_size
+    def __iter__(self):
+        self.pageno = 0
+        self.page = []
+        return self
+    def __next__(self):
+        if len(self.page) == 0:
+            cur = self.conn.execute('SELECT result FROM {} ORDER BY rowid LIMIT ? OFFSET ?'.format(self.key),
+                                    (self.page_size, self.page_size * self.pageno))
+            self.page = cur.fetchall()
+            if len(self.page) == 0:
+                raise StopIteration
+            logger.debug('SELECT result FROM {} LIMIT {} OFFSET {}'.format(
+                self.key, self.page_size, self.page_size * self.pageno))
+            self.pageno += 1
+        return pickle.loads(self.page.pop(0)[0])
 
 
 class CachingConnection(ldap3.Connection):
@@ -39,37 +61,15 @@ class CachingConnection(ldap3.Connection):
         del kwargs['server_fqdn']
         ldap3.Connection.__init__(self, *args, **kwargs)
 
-    def get_conn(self):
+    def get_db_conn(self):
         # return thread specific db connection
         if not getattr(self.local, 'conn', None) or self.local.conn is None:
             self.local.conn = sqlite3.connect(self.session_file)
         return self.local.conn
 
-    class SearchResponse:
-        ''' query response object. returns generator with 1 result per call '''
-        def __init__(self, conn, key, page_size=MAX_PAGE_SIZE):
-            self.conn = conn
-            self.key = key
-            self.page_size = page_size
-        def __iter__(self):
-            self.pageno = 0
-            self.page = []
-            return self
-        def __next__(self):
-            if len(self.page) == 0:
-                cur = self.conn.execute('SELECT result FROM {} ORDER BY rowid LIMIT ? OFFSET ?'.format(self.key),
-                                        (self.page_size, self.page_size * self.pageno))
-                self.page = cur.fetchall()
-                if len(self.page) == 0:
-                    raise StopIteration
-                logger.debug('SELECT result FROM {} LIMIT {} OFFSET {}'.format(
-                    self.key, self.page_size, self.page_size * self.pageno))
-                self.pageno += 1
-            return pickle.loads(self.page.pop(0)[0])
-
     def cache_append(self, key, response, query, pageno):
         ''' add each response to the cache as a row in the db '''
-        conn = self.get_conn()
+        conn = self.get_db_conn()
         with conn:
             conn.execute('CREATE TABLE IF NOT EXISTS cache_meta (key TEXT, time INTEGER, server TEXT, query TEXT, user TEXT)')
             conn.execute('INSERT OR REPLACE INTO cache_meta (key, time, server, query, user) VALUES (?, ?, ?, ?, ?)',
@@ -86,11 +86,11 @@ class CachingConnection(ldap3.Connection):
         return 'h' + key
 
     def cache_get(self, key):
-        conn = self.get_conn()
+        conn = self.get_db_conn()
         cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='{}'".format(key))
         exists = (cur.fetchone() is not None)
         if exists:
-            return self.SearchResponse(conn, key)
+            return SearchResponse(conn, key)
         return None
 
     def searchg(self, search_base, search_filter, search_scope=ldap3.SUBTREE, **kwargs):
@@ -107,6 +107,7 @@ class CachingConnection(ldap3.Connection):
 
         logger.debug('SEARCH ({}) {} {}'.format(search_base, search_filter, search_scope))
         kwargs['paged_criticality'] = True # fail if paging not supported
+        kwargs['paged_size'] = kwargs.get('paged_size', MAX_PAGE_SIZE)
         kwargs['time_limit'] = self.timeout
 
         pageno = 0
@@ -127,13 +128,8 @@ class CachingConnection(ldap3.Connection):
             self.cache_append(key, response, query, pageno)
             logger.debug('Page {}: {} results'.format(pageno, len(response)))
 
-            # break if not doing paged search
-            if 'paged_size' not in kwargs:
-                break
-
             cookie = result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
             if not cookie:
-                # b'' -> last page
                 break
             kwargs['paged_cookie'] = cookie
             pageno += 1
@@ -151,15 +147,19 @@ class CachingConnection(ldap3.Connection):
 
     def get_info(self):
         # add hostname to prevent cached result from another host
-        response = self.searchg('', '(objectClass=*)', search_scope=ldap3.BASE, dereference_aliases=ldap3.DEREF_NEVER,
-                                attributes=['dnsHostName', 'supportedLDAPVersion', 'rootDomainNamingContext',
-                                            'domainFunctionality', 'forestFunctionality', 'domainControllerFunctionality',
-                                            'defaultNamingContext', 'supportedLDAPPolicies', self.server_fqdn])
+        response = self.searchg(
+            '',
+            '(objectClass=*)',
+            search_scope=ldap3.BASE,
+            dereference_aliases=ldap3.DEREF_NEVER,
+            attributes=['dnsHostName', 'supportedLDAPVersion', 'rootDomainNamingContext',
+                        'domainFunctionality', 'forestFunctionality', 'domainControllerFunctionality',
+                        'defaultNamingContext', 'supportedLDAPPolicies', self.server_fqdn])
         self.info = list(response)[0]['attributes']
         return dict(self.info)
 
 
-def get_connection(args, addr=None, conn_class=CachingConnection):
+def get(args, addr=None):
     username = None
     password = None
     if not args.anonymous:
@@ -177,15 +177,30 @@ def get_connection(args, addr=None, conn_class=CachingConnection):
             logger.debug('NTHASH '+hashlib.new('md4', password.encode('utf-16-le')).hexdigest())
 
     # avail: PROTOCOL_SSLv23, PROTOCOL_TLSv1, PROTOCOL_TLSv1_1, PROTOCOL_TLSv1_2
-    tls_config = ldap3.Tls(validate=ssl.CERT_NONE if args.insecure else ssl.CERT_OPTIONAL,
-                           version=ssl.PROTOCOL_TLSv1)
-    server = ldap3.Server(addr or args.server, use_ssl=args.tls, port=args.port, tls=tls_config, get_info=ldap3.ALL if args.info else None)
+    tls_config = ldap3.Tls(
+        validate=ssl.CERT_NONE if args.insecure else ssl.CERT_OPTIONAL,
+        version=ssl.PROTOCOL_TLSv1)
+    server = ldap3.Server(
+        addr or args.server,
+        use_ssl=args.tls,
+        port=args.port,
+        tls=tls_config,
+        get_info=ldap3.ALL if args.info else None)
     auth = ldap3.ANONYMOUS if args.anonymous else ldap3.NTLM
-    conn = conn_class(server, user=username, password=password, authentication=auth,
-                      version=args.version, read_only=True, auto_range=True,
-                      auto_bind=False, receive_timeout=args.timeout, timeout=args.timeout,
-                      session=args.session, server_fqdn=args.server_fqdn,
-                      #sasl_mechanism=ldap3.KERBEROS, sasl_credentials=(args.server_fqdn,) # for kerberos
+    conn = CachingConnection(
+        server,
+        user=username,
+        password=password,
+        authentication=auth,
+        version=args.version,
+        read_only=True,
+        auto_range=True,
+        auto_bind=False,
+        receive_timeout=args.timeout,
+        timeout=args.timeout,
+        session=args.session,
+        server_fqdn=args.server_fqdn,
+        #sasl_mechanism=ldap3.KERBEROS, sasl_credentials=(args.server_fqdn,) # for kerberos
     )
     conn.open()
     if args.info:
