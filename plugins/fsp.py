@@ -1,6 +1,5 @@
+import ldap3
 import logging
-from lib.adldap import *
-from lib.convert import *
 
 logger = logging.getLogger(__name__)
 
@@ -8,8 +7,11 @@ PLUGIN_NAME='fsp'
 g_parser = None
 
 def handler(args, conn):
-    response = conn.searchg(args.search_base, '(objectClass=foreignSecurityPrincipal)',
-                           attributes=[], search_scope=ldap3.SUBTREE)
+    response = conn.searchg(
+        args.search_base,
+        '(objectClass=foreignSecurityPrincipal)',
+        search_scope=ldap3.SUBTREE,
+        attributes=[])
     for r in response:
         print(r['dn'])
 

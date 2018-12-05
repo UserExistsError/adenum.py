@@ -1,4 +1,4 @@
-from lib.convert import *
+from ad.convert import sid_to_str
 
 PLUGIN_NAME='trust'
 g_parser = None
@@ -33,9 +33,19 @@ def handler(args, conn):
         2:'<=',                 # outgoing
         3:'<=>',                # bi-directional
     }
-    attributes=['trustAttributes', 'trustAuthIncoming', 'trustAuthOutgoing', 'trustDirection',
-                'trustPartner', 'trustType', 'securityIdentifier']
-    response = conn.searchg(args.search_base, '(objectClass=trustedDomain)', attributes=attributes)
+    attributes = [
+        'trustAttributes',
+        'trustAuthIncoming',
+        'trustAuthOutgoing',
+        'trustDirection',
+        'trustPartner',
+        'trustType',
+        'securityIdentifier'
+    ]
+    response = conn.searchg(
+        args.search_base,
+        '(objectClass=trustedDomain)',
+        attributes=attributes)
     for r in response:
         print('Partner     ', r['attributes']['trustPartner'][0])
         print('PartnerDN   ', r['dn'])

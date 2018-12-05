@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import sys
 import socket
 import logging
@@ -12,12 +13,12 @@ import dns.query
 
 # local modules
 import plugins
-from lib.utils import *
-from lib.names import *
-from lib.adldap import *
-from lib.config import *
-from lib.convert import *
-from lib.connection import *
+
+import net.name
+import net.util
+import ad.dc
+import ad.connection
+from config import TIMEOUT
 
 DESCRIPTION = 'Enumerate ActiveDirectory users, groups, computers, and password policies'
 
@@ -64,26 +65,27 @@ if __name__ == '__main__':
 
     socket.setdefaulttimeout(args.timeout)
 
+    # setup logging
     if args.debug:
         h = logging.StreamHandler()
         h.setFormatter(logging.Formatter('[%(levelname)s] %(filename)s:%(lineno)s %(message)s'))
-        for n in [__name__, 'plugins', 'lib']:
+        for n in [__name__, 'plugins', 'ad', 'net']:
             l = logging.getLogger(n)
             l.setLevel(logging.DEBUG)
             l.addHandler(h)
     elif args.verbose:
         h = logging.StreamHandler()
         h.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
-        for n in [__name__, 'plugins', 'lib']:
+        for n in [__name__, 'plugins', 'ad', 'net']:
             l = logging.getLogger(n)
             l.setLevel(logging.INFO)
             l.addHandler(h)
 
-    if args.username is None:
-        args.anonymous = True
-
     for p in plugin_list:
         logger.debug('Loaded Plugin: '+p.PLUGIN_NAME)
+
+    if args.username is None:
+        args.anonymous = True
 
     if args.proxy:
         proxy_host, proxy_port = args.proxy.split(':')
@@ -92,9 +94,9 @@ if __name__ == '__main__':
         socket.socket = socks.socksocket
         dns.query.socket_factory = socks.socksocket
 
-    if args.server and not is_addr(args.server):
+    if args.server and not net.util.is_addr(args.server):
         # resolve DC hostname
-        args.server = get_addr_by_host(args.server, args.name_server, args.timeout) or get_host_by_name(args.server)
+        args.server = net.name.get_addr_by_host(args.server, args.name_server, args.timeout) or net.name.get_host_by_name(args.server)
         if not args.server:
             print('Error: Failed to resolve DC hostname')
             sys.exit()
@@ -111,7 +113,8 @@ if __name__ == '__main__':
         fqdn = None
         if not args.server:
             if args.name_server:
-                fqdn = get_fqdn_by_addr(args.name_server, args.name_server, args.timeout)
+                # presumably, the name server is on the same domain as the dc (likely same host)
+                fqdn = net.name.get_fqdn_by_addr(args.name_server, args.name_server, args.timeout)
             else:
                 if os.path.exists('/etc/resolv.conf'):
                     for line in [l.strip() for l in open('/etc/resolv.conf')]:
@@ -121,18 +124,17 @@ if __name__ == '__main__':
                             break
         else:
             logger.debug('Querying LDAP for domain')
-            info = get_dc_info(args)
+            info = ad.dc.get_info(args)
             args.domain = info['defaultNamingContext'][3:].lower().replace(',dc=', '.')
-            #args.domain = info['rootDomainNamingContext'][3:].lower().replace(',dc=', '.')
             if not args.domain:
-                fqdn = get_fqdn_by_addr(args.server, args.name_server, args.timeout)
+                fqdn = net.name.get_fqdn_by_addr(args.server, args.name_server, args.timeout)
                 if not fqdn and args.server != args.name_server:
                     # try dns query against the domain controller
-                    fqdn = get_fqdn_by_addr(args.server, args.server, args.timeout)
+                    fqdn = net.name.get_fqdn_by_addr(args.server, args.server, args.timeout)
         if fqdn:
             args.domain = fqdn.split('.', maxsplit=1)[-1]
         if not args.domain:
-            print('Error: Failed to get domain. Try supplying one with --d, --domain.')
+            logger.error('Failed to get domain. Try supplying one with --d, --domain.')
             sys.exit()
         logger.info('Found domain: '+args.domain)
 
@@ -147,21 +149,21 @@ if __name__ == '__main__':
         # attempt to find a DC
         logger.info('Looking for domain controller for '+args.domain)
         try:
-            args.server = get_domain_controllers_by_dns(args.domain, args.name_server, args.timeout)[0]['address']
+            args.server = ad.dc.get_domain_controllers_by_dns(args.domain, args.name_server, args.timeout)[0]['address']
         except:
-            print('Error: Failed to find a domain controller')
+            logger.error('Failed to find a domain controller')
             sys.exit()
         logger.info('Found a domain controller for {} at {}'.format(args.domain, args.server))
 
     # get search base. should be root of DC being queried
     name_servers = [args.name_server, args.server] if args.name_server else [args.server]
-    args.server_fqdn = addr_to_fqdn(args.server, name_servers, port=args.smb_port, timeout=args.timeout)
+    args.server_fqdn = ad.dc.addr_to_fqdn(args.server, name_servers, port=args.smb_port, timeout=args.timeout)
     if args.server_fqdn:
         args.hostname = args.server_fqdn.split('.', maxsplit=1)[0]
         args.server_domain = args.server_fqdn.split('.', maxsplit=1)[-1]
         args.search_base = 'dc='+args.server_domain.replace('.', ',dc=')
     else:
-        print('Error: unable to determine domain for '+args.server)
+        logger.error('Unable to determine domain for '+args.server)
         sys.exit()
 
     logger.debug('DC         {} ({})'.format(args.hostname, args.server))
@@ -169,13 +171,13 @@ if __name__ == '__main__':
     logger.debug('Username   {}\\{}'.format(args.domain, args.username))
     logger.debug('SearchBase '+args.search_base)
     logger.debug('NameServer '+ (args.name_server or args.server or 'default'))
-    if not is_private_addr(args.server) and not args.insecure:
+    if not net.util.is_private_addr(args.server) and not args.insecure:
         raise Warning('Aborting due to public LDAP server. use --insecure to override')
 
-    conn = get_connection(args)
+    conn = ad.connection.get(args)
 
     if not conn.bound:
-        print('Error: failed to bind')
+        logger.error('failed to bind')
         sys.exit()
     logger.debug('WHOAMI '+(conn.extend.standard.who_am_i() or ''))
 

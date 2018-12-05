@@ -1,14 +1,14 @@
 import struct
 import datetime
 
-def dw(d):
+def dw_to_i(d):
     ''' convert attrs stored as dwords to an int '''
     return 0 if d == 0 else 0xffffffff + d + 1
 
 def timestr_or_never(t):
     return 'Never' if t in [0, 0x7FFFFFFFFFFFFFFF] else ft_to_str(t)
 
-def cn(dn):
+def dn_to_cn(dn):
     ''' return common name from distinguished name '''
     return dn.split(',')[0].split('=')[-1]
 
@@ -84,3 +84,14 @@ def get_attr(o, attr, default=None, trans=None):
         return trans(v)
     return v
 
+escape_trans = str.maketrans(
+    {'*': r'\2a',
+     '(': r'\28',
+     ')': r'\29',
+     '\\': r'\5c',
+     '\x00': r'\00',
+     '/': r'\2f'})
+
+def escape(s):
+    ''' https://msdn.microsoft.com/en-us/library/aa746475(v=vs.85).aspx '''
+    return s.translate(escape_trans)

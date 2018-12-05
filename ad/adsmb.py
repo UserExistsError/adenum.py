@@ -1,148 +1,16 @@
 import os
-import sys
-import ldap3
-import socket
 import struct
+import socket
 import logging
-import binascii
 import datetime
-import subprocess
+import binascii
 from ctypes import LittleEndianStructure, c_uint32
 
-from lib.names import *
-from lib.config import *
-from lib.convert import *
-from lib.inet import *
+from net.util import get_tcp_socket, is_addr4, is_addr6
+from config import TIMEOUT
 
 logger = logging.getLogger(__name__)
 
-def get_tcp_socket(addr):
-    if is_addr4(addr):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
-    elif is_addr6(addr):
-        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM, 0)
-    else:
-        raise ValueError('Not a valid IPv4/6 addr: '+str(addr))
-    return s
-
-def get_domain_controllers_by_ldap(conn, search_base, name_server=None, timeout=TIMEOUT):
-    # or primaryGroupID = 516 (GROUP_RID_CONTROLLERS)
-    search_base = 'OU=Domain Controllers,'+search_base
-    response = conn.searchg(search_base, '(objectCategory=computer)', search_scope=ldap3.SUBTREE,
-                attributes=['dNSHostName', 'objectSid'])
-    servers = []
-    for s in response:
-        hostname = s['attributes']['dNSHostName'][0]
-        addr = get_addr_by_host(hostname, name_server, timeout) or \
-               get_addr_by_host(hostname, conn.server.host, timeout)
-        if addr:
-            servers.append({'address':addr, 'hostname':hostname, 'sid':s['attributes']['objectSid'][0]})
-    return servers
-
-def get_domain_controllers_by_dns(domain, name_server=None, timeout=TIMEOUT):
-    ''' return the domain controller addresses for a given domain '''
-    resolver = get_resolver(name_server, timeout)
-    queries = [
-        ('_ldap._tcp.dc._msdcs.'+domain, 'SRV'), # joining domain
-        ('_ldap._tcp.'+domain, 'SRV'),
-        (domain, 'A'),
-        (domain, 'AAAA'),
-    ]
-    answer = None
-    for q in queries:
-        try:
-            logger.debug('Resolving {} via {}'.format(q[0], name_server or 'default'))
-            answer = resolver.query(q[0], q[1])
-            logger.debug('Answer '+str(answer[0]).split()[-1])
-            break
-        except Exception as e:
-            logger.debug('Failed to resolve {} via {}'.format(q[0], name_server or 'default'))
-    if not answer:
-        # last, try using the default name lookup for your host (may include hosts file)
-        addr = get_host_by_name(domain)
-        if addr:
-            answer = [addr]
-        else:
-            answer = []
-    servers = []
-    for a in answer:
-        hostname = str(a).split()[-1]
-        addr = get_addr_by_host(hostname, name_server, timeout)
-        if addr:
-            servers.append({'address':addr, 'hostname':hostname})
-    return servers
-
-
-def ping_host(addr, timeout=TIMEOUT):
-    ''' check if host is alive by first calling out to ping, then
-    by initiating a connection on tcp/445 '''
-    if not is_addr(addr):
-        return False
-    if sys.platform.lower().startswith('windows'):
-        cmd = ['ping', '-n', '1', '-w', str(int(timeout)), addr]
-    else:
-        cmd = ['ping', '-c', '1', '-W', str(int(timeout)), addr]
-    logger.debug('Running '+' '.join(cmd))
-    try:
-        subprocess.check_call(cmd, stderr=subprocess.STDOUT, stdout=open(os.devnull, 'w'))
-        return True
-    except Exception:
-        pass
-    s = get_tcp_socket(addr)
-    s.settimeout(timeout)
-    logger.debug('Connecting to {}:445'.format(addr))
-    try:
-        s.connect((addr, 445))
-        return True
-    except socket.timeout:
-        pass
-    return False
-
-def parse_target_info(ti, info):
-    ''' parse the target info section of an NTLMSSP negotiation '''
-    if ti == b'\x00\x00\x00\x00':
-        return
-    t, l = struct.unpack('<HH', ti[:4])
-    v = ti[4:4+l]
-    if t == 0x1:
-        info['netbios_name'] = v.decode('utf-16-le')
-    elif t == 0x2:
-        info['netbios_domain'] = v.decode('utf-16-le')
-    elif t == 0x3:
-        info['dns_name'] = v.decode('utf-16-le')
-    elif t == 0x4:
-        info['dns_domain'] = v.decode('utf-16-le')
-    # elif t == 0x5:
-    #     info['dns_tree_name'] = v.decode('utf-16-le')
-    # elif t == 0x7:
-    #     info['time'] = filetime_to_str(struct.unpack('<Q', v)[0])
-    parse_target_info(ti[4+l:], info)
-
-def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=TIMEOUT):
-    ''' get the hosts domain, fully qualified, any way we can. try SMB first since all
-    domain controllers should have 445 open. also, if you are forwarding your connection,
-    this method will get the correct hostname. aborts for 127. ips if SMB fails '''
-    is_loopback = addr.startswith('127.') or addr == '::1'
-    if not is_loopback:
-        if None not in name_servers:
-            name_servers.append(None) # use default name server
-        logger.debug('Getting domain for {} by DNS'.format(addr))
-        for ns in name_servers:
-            fqdn = get_fqdn_by_addr(addr, ns, timeout)
-            if fqdn:
-                return fqdn
-        if conn and args:
-            logger.debug('Getting domain for {} by LDAP'.format(addr))
-            info = get_dc_info(args, conn)
-            try:
-                return info['dnsHostName']
-            except:
-                pass
-    logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
-    info = get_smb_info(addr, timeout, port)
-    if info and info.get('dns_name', None):
-        return info.get('dns_name')
-    return None
 
 class NegotiateFlags(LittleEndianStructure):
     _fields_ = list(reversed([
@@ -187,6 +55,26 @@ class NegotiateFlags(LittleEndianStructure):
         for n, t, _ in self._fields_:
             s += '{:45s} {}\n'.format(n, getattr(self, n))
         return s
+
+def parse_target_info(ti, info):
+    ''' parse the target info section of an NTLMSSP negotiation '''
+    if ti == b'\x00\x00\x00\x00':
+        return
+    t, l = struct.unpack('<HH', ti[:4])
+    v = ti[4:4+l]
+    if t == 0x1:
+        info['netbios_name'] = v.decode('utf-16-le')
+    elif t == 0x2:
+        info['netbios_domain'] = v.decode('utf-16-le')
+    elif t == 0x3:
+        info['dns_name'] = v.decode('utf-16-le')
+    elif t == 0x4:
+        info['dns_domain'] = v.decode('utf-16-le')
+    # elif t == 0x5:
+    #     info['dns_tree_name'] = v.decode('utf-16-le')
+    # elif t == 0x7:
+    #     info['time'] = filetime_to_str(struct.unpack('<Q', v)[0])
+    parse_target_info(ti[4+l:], info)
 
 def get_smb_info(addr, timeout=TIMEOUT, port=445):
     def get_smb_error(data):

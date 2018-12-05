@@ -1,6 +1,6 @@
 import logging
-from lib.adldap import *
-from lib.convert import *
+
+from ad.convert import sid_to_ldap, sid_to_str
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,10 @@ def handler(args, conn):
     for s in args.sids:
         sid_hex = sid_to_ldap(str_to_sid(s))
         sidstr += '(objectSid={})'.format(sid_hex)
-    response = conn.searchg(args.search_base, '(|{})'.format(sidstr), attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn', 'objectCategory'])
+    response = conn.searchg(
+        args.search_base,
+        '(|{})'.format(sidstr),
+        attributes=['objectSid', 'userPrincipalName', 'samAccountName', 'cn', 'objectCategory'])
     for r in response:
         a = r['attributes']
         if args.dn:

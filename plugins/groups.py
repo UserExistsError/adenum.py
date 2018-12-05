@@ -1,5 +1,5 @@
-from lib.adldap import *
-from lib.convert import *
+import ad.group
+from ad.convert import dn_to_cn
 
 PLUGIN_NAME='groups'
 g_parser = None
@@ -7,14 +7,12 @@ g_parser = None
 def get_parser():
     return g_parser
 
-
 def handler(args, conn):
-    for g in get_groups(conn, args.search_base):
+    for g in ad.group.get_all(conn, args.search_base):
         if args.dn:
             print(g['dn'])
         else:
-            print(cn(g['dn']))
-
+            print(dn_to_cn(g['dn']))
 
 def get_arg_parser(subparser):
     global g_parser

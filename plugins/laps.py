@@ -2,8 +2,8 @@ import os
 import sys
 import logging
 
-from lib.adldap import *
-
+import ad.computer
+from ad.convert import dn_to_cn
 '''
 enumerate hosts configured with "Local Administrator Password Solution" (LAPS)
 
@@ -25,7 +25,7 @@ def get_parser():
     return g_parser
 
 def handler(args, conn):
-    computers = get_computers(conn, args.search_base, attributes=['ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime', 'dNSHostName'])
+    computers = ad.computer.get_all(conn, args.search_base, attributes=['ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime', 'dNSHostName'])
     for c in computers:
         if len(c['attributes']['dNSHostName']):
             info = 'dNHostName: {}\n'.format(c['attributes']['dNSHostName'][0])
@@ -43,7 +43,7 @@ def handler(args, conn):
         if args.dn:
             sys.stdout.write('dn: '+c['dn'] + os.linesep + info + os.linesep)
         else:
-            sys.stdout.write('cn: '+cn(c['dn']) + os.linesep + info + os.linesep)
+            sys.stdout.write('cn: '+dn_to_cn(c['dn']) + os.linesep + info + os.linesep)
 
 
 def get_arg_parser(subparser):

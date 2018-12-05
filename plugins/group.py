@@ -1,6 +1,7 @@
 import logging
-from lib.adldap import *
-from lib.convert import *
+
+import ad.group
+from ad.convert import dn_to_cn
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ def get_parser():
 
 
 def handler(args, conn):
-    members = get_users_in_group(conn, args.search_base, args.group)
+    members = ad.group.get_users(conn, args.search_base, args.group)
     for u in members:
         if args.dn:
             print(u.get('dn', u))
@@ -20,7 +21,7 @@ def handler(args, conn):
             try:
                 print(u['attributes']['userPrincipalName'][0].split('@')[0])
             except:
-                print(cn(u['dn']))
+                print(dn_to_cn(u['dn']))
 
 
 def get_arg_parser(subparser):

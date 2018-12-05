@@ -1,3 +1,5 @@
+import ldap3
+
 PLUGIN_NAME='modify'
 g_parser = None
 
@@ -7,7 +9,12 @@ def get_parser():
 def handler(args, conn):
     # 'MODIFY_ADD', 'MODIFY_DELETE', 'MODIFY_INCREMENT', 'MODIFY_REPLACE'
     raise NotImplementedError
-    action_map = {'add':ldap3.MODIFY_ADD, 'del':ldap3.MODIFY_DELETE, 'inc':ldap3.MODIFY_INCREMENT, 'replace':ldap3.MODIFY_REPLACE}
+    action_map = {
+        'add':ldap3.MODIFY_ADD,
+        'del':ldap3.MODIFY_DELETE,
+        'inc':ldap3.MODIFY_INCREMENT,
+        'replace':ldap3.MODIFY_REPLACE
+    }
     conn.modify(dn, {args.attribute:[(ldap3.MODIFY_REPLACE, args.values)]})
     logger.debug(conn.result)
 
