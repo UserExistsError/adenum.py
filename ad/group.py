@@ -4,22 +4,25 @@ from ad.convert import gid_from_sid
 
 logger = logging.getLogger(__name__)
 
-def get_all(conn, search_base):
+def get_all(conn):
     ''' get all domain groups '''
-    response = conn.searchg(search_base, '(objectCategory=group)', attributes=['objectSid', 'groupType'])
+    response = conn.searchg(
+        conn.default_search_base,
+        '(objectCategory=group)',
+        attributes=['objectSid', 'groupType', 'objectClass'])
     return [g for g in response if g.get('dn', None)]
 
-def get_users(conn, search_base, group):
+def get_users(conn, group):
     ''' return all members of group
     TODO: recurse into member groups. for now, just treat like a user. '''
     if group.find('=') > 0:
         response = conn.searchg(
-            search_base,
+            conn.default_search_base,
             '(&(objectCategory=Group)(distinguishedName={}))'.format(group),
             attributes=['objectSid', 'distinguishedName'])
     else:
         response = conn.searchg(
-            search_base,
+            conn.default_search_base,
             '(&(objectCategory=Group)(cn={}))'.format(group),
             attributes=['objectSid', 'distinguishedName'])
     response = list(response)
@@ -33,14 +36,14 @@ def get_users(conn, search_base, group):
     gid = gid_from_sid(group['attributes']['objectSid'][0])
     # get all users with primaryGroupID of gid
     response = conn.searchg(
-        search_base,
+        conn.default_search_base,
         '(&(objectCategory=user)(primaryGroupID={}))'.format(gid),
         attributes=['distinguishedName', 'userPrincipalName', 'samAccountName'])
 
     users = [u for u in response if u.get('dn', False)]
     # get all users in group using "memberOf" attribute. primary group is not included in the "memberOf" attribute
     response = conn.searchg(
-        search_base,
+        conn.default_search_base,
         '(&(|(objectCategory=user)(objectCategory=group))(memberOf={}))'.format(group['dn']),
         attributes=['distinguishedName', 'userPrincipalName'])
     users += [u for u in response if u.get('dn', False)]

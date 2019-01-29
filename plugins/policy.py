@@ -1,6 +1,7 @@
 import logging
 
 import ad.password
+from ad.convert import interval_to_minutes, dn_to_cn
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def handler(args, conn):
         print('Precedence                     ', a['msDS-PasswordSettingsPrecedence'][0])
         print('Applies to')
         for dn in a['msDS-PSOAppliesTo']:
-            print('    '+dn) if args.dn else print('    '+cn(dn))
+            print('    '+dn) if args.dn else print('    '+dn_to_cn(dn))
         print('')
 
 

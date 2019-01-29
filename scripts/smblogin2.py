@@ -78,7 +78,6 @@ def login(host, args):
         smbconn.logoff()
     except:
         pass
-    sys.stdout.write('thread exit\n')
 
 abort_flag = False
 

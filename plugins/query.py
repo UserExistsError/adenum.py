@@ -1,7 +1,7 @@
 import ldap3
 import logging
 
-from ad.convert import escape
+from ad.convert import escape, get_attr
 
 logger = logging.getLogger(__name__)
 
@@ -9,10 +9,11 @@ PLUGIN_NAME='query'
 g_parser = None
 
 EXAMPLES='''
-        # look for users by last name
-        query -f '(&(objectCategory=user)(displayName=*LASTNAME*))' -s subtree userPrincipalName samAccountName description
-        # look for exchange servers
-        query -f '(&(objectCategory=computer)(name=*EXCH*))' -s subtree description dNSHostName operatingSystemVersion
+    # look for users by last name
+    query -f '(&(objectCategory=user)(displayName=*LASTNAME*))' -s subtree userPrincipalName samAccountName description
+
+    # look for exchange servers
+    query -f '(&(objectCategory=computer)(dNSHostName=*EXCH*))' -s subtree description dNSHostName operatingSystemVersion
 '''
 
 def get_parser():
@@ -51,8 +52,7 @@ def handler(args, conn):
         base = ''
 
     if args.allowed:
-        # range doesn't seem to work...
-        response = custom_query(conn, base, args.filter, scope=scope, attrs=['allowedAttributes', 'range=0-1'])
+        response = custom_query(conn, base, args.filter, scope=scope, attrs=['allowedAttributes'])
         print('AllowedAttributes')
         for a in list(response)[0]['attributes']['allowedAttributes']:
             print('    ', a)
@@ -62,7 +62,8 @@ def handler(args, conn):
     for r in response:
         if 'dn' in r:
             print(r['dn'])
-            for a in args.attributes:
+            #for a in args.attributes:
+            for a in r['attributes']:
                 print(a, get_attr(r, a, ''))
             print('')
 
@@ -76,8 +77,8 @@ def get_arg_parser(subparser):
         g_parser.add_argument('-a', '--append', action='store_true', default=False, help='append base to DC')
         g_parser.add_argument('-f', '--filter', help='search filter')
         g_parser.add_argument('-s', '--scope', type=str.lower,  default='base', choices=['base', 'level', 'subtree'], help='search scope')
-        g_parser.add_argument('--allowed', action='store_true', help='retrieve allowed atrributes')
+        g_parser.add_argument('--allowed', action='store_true', help='retrieve allowed attributes')
         g_parser.add_argument('--examples', action='store_true', help='show examples')
         g_parser.add_argument('-e', '--escape', help='escape string and exit')
-        g_parser.add_argument('attributes', default=[], nargs='*', help='attributes to retrieve')
+        g_parser.add_argument('attributes', default=[], nargs='*', help='attributes to retrieve. * for all')
     return g_parser

@@ -13,7 +13,7 @@ def get_parser():
 
 
 def handler(args, conn):
-    members = ad.group.get_users(conn, args.search_base, args.group)
+    members = ad.group.get_users(conn, args.group)
     for u in members:
         if args.dn:
             print(u.get('dn', u))

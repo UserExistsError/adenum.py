@@ -25,7 +25,9 @@ def get_parser():
     return g_parser
 
 def handler(args, conn):
-    computers = ad.computer.get_all(conn, args.search_base, attributes=['ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime', 'dNSHostName'])
+    computers = ad.computer.get_all(
+        conn,
+        attributes=['ms-Mcs-AdmPwd', 'mcs-AdmPwdExpirationTime', 'dNSHostName'])
     for c in computers:
         if len(c['attributes']['dNSHostName']):
             info = 'dNHostName: {}\n'.format(c['attributes']['dNSHostName'][0])

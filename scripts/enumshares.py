@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+import ntpath
 import logging
 import binascii
 import argparse
@@ -27,7 +28,7 @@ def crawl_share(conn, share):
         try:
             for f in conn.listPath(share, path):
                 if f.isDirectory:
-                    if f.filename not in ['.', '..']:
+                    if f.filename not in args.exclude:
                         dirs.append(path+'\\'+f.filename)
                 else:
                     sys.stdout.write('\\\\{}\\{}{}\\{}\n'.format(conn.remote_name, share, path, f.filename))
@@ -41,6 +42,9 @@ def enum_thread(args, host):
     conn.connect(host, port=args.smb_port)
     shares = [s.name for s in conn.listShares() if s.type == smb.base.SharedDevice.DISK_TREE]
     for s in shares:
+        if s.lower() in args.exclude:
+            logger.debug('Skipping excluded dir: '+s)
+            continue
         logger.debug('Crawling share '+s)
         crawl_share(conn, s)
     conn.close()
@@ -67,7 +71,12 @@ if __name__ == '__main__':
     parser.add_argument('--smb-port', dest='smb_port', type=int, default=445, help='SMB port. default 445')
     #parser.add_argument('--proxy', help='socks5 proxy: eg 127.0.0.1:8888')
     parser.add_argument('--debug', action='store_true', help='enable debug output')
+    parser.add_argument('-x', '--exclude', action='append', help='dirs to exclude from crawling')
     args = parser.parse_args()
+
+    args.exclude.append('.')
+    args.exclude.append('..')
+    args.exclude = set(map(str.lower, args.exclude))
 
     if args.debug:
         h = logging.StreamHandler()

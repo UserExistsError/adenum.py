@@ -58,10 +58,11 @@ def str_to_sid(sid_str):
 
 def sid_to_str(sid):
     ''' accepts SID as returned by ldap and converts to string '''
-    sid_str = 'S-{}-{}-'.format(sid[0], struct.unpack('>Q', b'\x00\x00'+sid[2:8])[0])
-    ids = struct.unpack('<'+str(sid[1])+'I', sid[8:])
-    sid_str += '-'.join([str(i) for i in ids])
-    return sid_str
+    rev = sid[0]
+    cnt = sid[1]
+    ath = struct.unpack('>Q', b'\x00\x00'+sid[2:8])[0]
+    ids = struct.unpack('<'+str(cnt)+'I', sid[8:8+cnt*4])
+    return 'S-{}-{}-{}'.format(rev, ath, '-'.join([str(i) for i in ids]))
 
 def gid_from_sid(sid):
     if type(sid) == str:

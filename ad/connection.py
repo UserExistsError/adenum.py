@@ -8,6 +8,7 @@ import hashlib
 import getpass
 import sqlite3
 import threading
+from ldap3.core.results import RESULT_SIZE_LIMIT_EXCEEDED, RESULT_SUCCESS
 
 from config import TIMEOUT, MAX_PAGE_SIZE
 
@@ -59,6 +60,8 @@ class CachingConnection(ldap3.Connection):
         del kwargs['timeout']
         self.server_fqdn = kwargs.get('server_fqdn', args[0].host).lower()
         del kwargs['server_fqdn']
+        self.default_search_base = kwargs['default_search_base']
+        del kwargs['default_search_base']
         ldap3.Connection.__init__(self, *args, **kwargs)
 
     def get_db_conn(self):
@@ -126,7 +129,11 @@ class CachingConnection(ldap3.Connection):
 
             # add results to cache
             self.cache_append(key, response, query, pageno)
-            logger.debug('Page {}: {} results'.format(pageno, len(response)))
+            logger.debug('RESULT: page={} results={} status={}'.format(pageno, len(response), result['description']))
+
+            if result['result'] != RESULT_SUCCESS:
+                logger.error('Query error: {}'.format(result['result']))
+                raise RuntimeError('Query error: {}'.format(result['result']))
 
             cookie = result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
             if not cookie:
@@ -134,9 +141,7 @@ class CachingConnection(ldap3.Connection):
             kwargs['paged_cookie'] = cookie
             pageno += 1
 
-        logger.debug('RESULT {} {}'.format(len(response), str(result)))
-
-        if result['result'] == 4:
+        if result['result'] == RESULT_SIZE_LIMIT_EXCEEDED:
             logger.warn('Max results reached: {}'.format(len(response)))
 
         return self.cache_get(key)
@@ -200,6 +205,7 @@ def get(args, addr=None):
         timeout=args.timeout,
         session=args.session,
         server_fqdn=args.server_fqdn,
+        default_search_base=args.search_base,
         #sasl_mechanism=ldap3.KERBEROS, sasl_credentials=(args.server_fqdn,) # for kerberos
     )
     conn.open()

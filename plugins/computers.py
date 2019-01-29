@@ -64,7 +64,7 @@ def computer_info_wrapper(computer, args):
         logger.error('Computer info {}: {}'.format(get_attr(computer, 'dNSHostName', ''), e))
 
 def handler(args, conn):
-    computers = ad.computer.get_all(conn, args.search_base, attributes=args.attributes)
+    computers = ad.computer.get_all(conn, attributes=args.attributes)
     if args.basic:
         for c in computers:
             print(c['attributes']['dNSHostName'][0], c['attributes']['distinguishedName'][0])

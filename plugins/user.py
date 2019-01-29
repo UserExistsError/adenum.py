@@ -66,7 +66,7 @@ def print_user(user, conn, args):
 
     if not args.basic:
         try:
-            groups = ad.user.get_groups(conn, args.search_base, user['dn'])
+            groups = ad.user.get_groups(conn, user['dn'])
             primary_group = [g['dn'] for g in groups if struct.unpack(
                 '<H', g['attributes']['objectSid'][0][-4:-2])[0] == int(a['primaryGroupID'][0])][0]
             print('PrimaryGroup              "{}"'.format(primary_group if args.dn else dn_to_cn(primary_group)))
@@ -100,7 +100,7 @@ def handler(args, conn):
         users.extend([u.strip() for u in open(args.userfile)])
     for user in set(users):
         try:
-            u = list(ad.user.get_info(conn, args.search_base, user))[0]
+            u = list(ad.user.get_info(conn, user))[0]
         except IndexError:
             logger.error('Failed to find user: '+user)
             continue
