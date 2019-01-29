@@ -2,7 +2,7 @@ import logging
 
 import ad.group
 import ad.user
-from ad.convert import sid_to_str
+from ad.convert import sid_to_str, dn_to_cn
 from .user import print_user
 
 logger = logging.getLogger(__name__)
@@ -14,26 +14,25 @@ def handler(args, conn):
     if args.privileged:
         # see https://adsecurity.org/?p=3658 and https://adsecurity.org/?p=3700
         priv_groups = [
-            'domain admins', 'enterprise admins',
-            'administrators',
+            'domain admins', 'enterprise admins', 'administrators',
             'account operators',
             'schema admins',
             'backup operators', # bypass file permissions
-            'DnsAdmins',        # load dll on dc
-            'RODC Admins',
+            'dnsadmins',        # load dll on dc
+            'rodc Admins',
             'server operators',
             'print operators'   # driver loading
         ]
         groups = set()
-        for g in ad.group.get_all(conn, args.search_base):
-            if 'admin' in g['dn'].lower() or g['dn'].split(',', maxsplit=1)[0][3:].lower() in priv_groups:
+        for g in ad.group.get_all(conn):
+            if g['dn'].split(',', maxsplit=1)[0][3:].lower() in priv_groups:
                 groups.add(g['dn'])
         for g in sorted(groups):
             logger.debug('Getting users in "{}"'.format(g))
-            members = ad.group.get_users(conn, args.search_base, g)
+            members = ad.group.get_users(conn, g)
             if len(members) == 0:
                 continue
-            print('=', g if args.dn else cn(g), '=')
+            print('=', g if args.dn else dn_to_cn(g), '=')
             for u in members:
                 if args.dn:
                     print(u['dn'])
@@ -41,11 +40,22 @@ def handler(args, conn):
                     try:
                         print(u['attributes']['userPrincipalName'][0].split('@')[0])
                     except:
-                        print(u['attributes'].get('samAccountName', [cn(u['dn'])])[0])
+                        print(u['attributes'].get('samAccountName', [dn_to_cn(u['dn'])])[0])
             print()
-            # get accounts that can replicate the DC
+
+        print('= AdminSDHolder =')
+        # these accounts have protected ACLs that are periodically overwritten by the AdminSDHolder ACLs
+        # ref: https://adsecurity.org/?p=1906
+        for u in conn.searchg(conn.default_search_base, '(&(objectCategory=user)(adminCount=1))', attributes=['userPrincipalName', 'samAccountName']):
+            if args.dn:
+                print(u['dn'])
+            else:
+                try:
+                    print(u['attributes']['userPrincipalName'][0].split('@')[0])
+                except:
+                    print(u['attributes'].get('samAccountName', [dn_to_cn(u['dn'])])[0])
     else:
-        users = ad.user.get_all(conn, args.search_base, active_only=args.active)
+        users = ad.user.get_all(conn, active_only=args.active)
         for u in users:
             if args.basic:
                 if 'dn' in u:

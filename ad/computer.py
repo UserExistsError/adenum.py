@@ -22,18 +22,18 @@ COMPUTER_ATTRIBUTES=[
     'mcs-AdmPwdExpirationTime'
 ]
 
-def get(conn, search_base, hostname, attributes=[]):
+def get(conn, hostname, attributes=[]):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
     if '.' in hostname:
-        response = list(conn.searchg(search_base, '(&(objectCategory=computer)(dNSHostname={}))'.format(hostname), attributes=attributes))
+        response = list(conn.searchg(conn.default_search_base, '(&(objectCategory=computer)(dNSHostname={}))'.format(hostname), attributes=attributes))
     else:
-        response = list(conn.searchg(search_base, '(&(objectCategory=computer)(cn={}))'.format(hostname), attributes=attributes))
+        response = list(conn.searchg(conn.default_search_base, '(&(objectCategory=computer)(cn={}))'.format(hostname), attributes=attributes))
     if len(response) > 1:
         logger.warning('Found multiple computers when expecting 1. Using first result only.')
     return list(response)[0]
 
 
-def get_all(conn, search_base, attributes=[]):
+def get_all(conn, attributes=[]):
     attributes = list(set(attributes + COMPUTER_ATTRIBUTES))
-    response = conn.searchg(search_base, '(objectCategory=computer)', attributes=attributes)
+    response = conn.searchg(conn.default_search_base, '(objectCategory=computer)', attributes=attributes)
     return [c for c in response if c.get('dn', None)]

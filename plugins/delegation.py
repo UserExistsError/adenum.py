@@ -37,6 +37,7 @@ def handler(args, conn):
         print('[Unconstrained Delegation]')
         for r in results:
             print(r['dn'])
+        print()
 
     # constrained delegation with protocol transition (eg ntlm -> krb). means account can impersonate any user for
     # specified SPNs. (uac -> TRUSTED_TO_AUTH_FOR_DELEGATION)
@@ -50,6 +51,7 @@ def handler(args, conn):
             print(r['dn'])
             for spn in r['attributes']['msDS-AllowedToDelegateTo']:
                 print('    ', spn)
+        print()
 
     # constrained delegation. for listed SPNs, this computer can act on behalf of any domain user as long as they are
     # logged in
@@ -63,7 +65,7 @@ def handler(args, conn):
             print(r['dn'])
             for spn in r['attributes']['msDS-AllowedToDelegateTo']:
                 print('    ', spn)
-
+        print()
 
 def get_arg_parser(subparser):
     global g_parser

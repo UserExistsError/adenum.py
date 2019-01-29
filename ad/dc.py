@@ -1,8 +1,10 @@
 import ldap3
 import logging
 
-from net.name import get_addr_by_host, get_fqdn_by_addr
 from config import TIMEOUT
+from ad.adsmb import get_smb_info
+from net.name import get_addr_by_host, get_fqdn_by_addr
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,24 +96,29 @@ def addr_to_fqdn(addr, name_servers=[], conn=None, args=None, port=445, timeout=
     ''' get the hosts domain, fully qualified, any way we can. try SMB first since all
     domain controllers should have 445 open. also, if you are forwarding your connection,
     this method will get the correct hostname. aborts for 127. ips if SMB fails '''
-    is_loopback = addr.startswith('127.') or addr == '::1'
-    if not is_loopback:
+    if args:
+        logger.debug('Getting fqdn for {} by LDAP'.format(addr))
+        info = get_info(args)
+        try:
+            fqdn = info['dnsHostName']
+            logger.debug('Got fqdn from LDAP: '+fqdn)
+            return fqdn
+        except:
+            pass
+
+    # try dns if we are not targeting a loopback address
+    if not addr.startswith('127.') or addr == '::1':
+        logger.debug('Getting domain for {} by DNS'.format(addr))
         if None not in name_servers:
             name_servers.append(None) # use default name server
-        logger.debug('Getting domain for {} by DNS'.format(addr))
         for ns in name_servers:
             fqdn = get_fqdn_by_addr(addr, ns, timeout)
             if fqdn:
                 return fqdn
-        if conn and args:
-            logger.debug('Getting domain for {} by LDAP'.format(addr))
-            info = ad.dc.get_info(args, conn)
-            try:
-                return info['dnsHostName']
-            except:
-                pass
+
     logger.debug('Getting domain for {} by SMB NTLMSSP'.format(addr))
     info = get_smb_info(addr, timeout, port)
     if info and info.get('dns_name', None):
+        logger.debug('Got fqdn from SMB: '+info.get('dns_name'))
         return info.get('dns_name')
     return None

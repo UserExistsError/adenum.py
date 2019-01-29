@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
     # get search base. should be root of DC being queried
     name_servers = [args.name_server, args.server] if args.name_server else [args.server]
-    args.server_fqdn = ad.dc.addr_to_fqdn(args.server, name_servers, port=args.smb_port, timeout=args.timeout)
+    args.server_fqdn = ad.dc.addr_to_fqdn(args.server, name_servers, args=args, port=args.smb_port, timeout=args.timeout)
     if args.server_fqdn:
         args.hostname = args.server_fqdn.split('.', maxsplit=1)[0]
         args.server_domain = args.server_fqdn.split('.', maxsplit=1)[-1]

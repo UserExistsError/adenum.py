@@ -77,11 +77,11 @@ def get_default_pass_policy(args, conn):
     ldap_props = {}
     if conn:
         response = list(conn.searchg('cn=Policies,cn=System,'+args.search_base,
-                               '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
-                               attributes=['gPCFileSysPath']))
-        gpo_path = response[0]['attributes']['gPCFileSysPath'][0]
-        response = conn.searchg(args.search_base, '(distinguishedName={})'.format(args.search_base,), ldap3.BASE,
-                               attributes=ldap_attrs)
+                                     '(cn={31B2F340-016D-11D2-945F-00C04FB984F9})',
+                                     attributes=['gPCFileSysPath']))
+        gpo_path = response[0]['attributes']['gPCFileSysPath'][0] # have found instances where this is not a list
+        response = conn.searchg(args.search_base, '(distinguishedName={})'.format(args.search_base,),
+                                ldap3.BASE, attributes=ldap_attrs)
         try:
             ldap_props = response[0]['attributes']
         except:

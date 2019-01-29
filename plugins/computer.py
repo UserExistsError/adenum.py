@@ -22,7 +22,7 @@ def handler(args, conn):
         if net.util.is_addr(host):
             host = net.name.get_fqdn_by_addr(host, name_server=args.name_server, timeout=args.timeout)
         if host:
-            computer = ad.computer.get(conn, args.search_base, host, args.attributes)
+            computer = ad.computer.get(conn, host, args.attributes)
             computer_info(computer, args)
 
 def get_arg_parser(subparser):
