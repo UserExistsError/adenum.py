@@ -3,8 +3,8 @@ import sys
 import argparse
 import logging
 import adenum
-from lib.utils import get_domain_controllers_by_dns
-from lib.names import get_fqdn_by_addr
+from ad.dc import get_domain_controllers_by_dns
+from net.name import get_fqdn_by_addr
 
 logger = logging.getLogger(adenum.__name__)
 
