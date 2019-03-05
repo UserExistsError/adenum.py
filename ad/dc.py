@@ -3,7 +3,7 @@ import logging
 
 from config import TIMEOUT
 from ad.adsmb import get_smb_info
-from net.name import get_addr_by_host, get_fqdn_by_addr
+from net.name import get_addr_by_host, get_fqdn_by_addr, get_resolver
 
 
 logger = logging.getLogger(__name__)
