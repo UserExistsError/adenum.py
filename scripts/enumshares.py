@@ -50,8 +50,25 @@ def enum_shares(args):
         logger.debug('passing the NTLM hash')
         smb.ntlm.MD4 = MyMD4Class.new
     hosts = list(args.hosts)
+
+    # check for CIDR, then expand
+    from netaddr import IPNetwork
+    newhosts = []
+    for h in hosts:
+        if "/" in h:
+            newhosts.extend([str(ip) for ip in IPNetwork(h)])
+        else:
+            newhosts.append(h)
+
+    hosts = newhosts
+
     if args.filename:
-        hosts.extend([l.strip() for l in open(args.filename)])
+        for l in open(args.filename):
+            if "/" in l.strip():
+                hosts.extend([str(ip) for ip in IPNetwork(l.strip())])
+            else:
+                hosts.append(l.strip())
+        #hosts.extend([l.strip() for l in open(args.filename)])
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as e:
         concurrent.futures.wait([e.submit(enum_thread, args, h) for h in set(hosts)])
 
