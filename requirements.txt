@@ -3,3 +3,4 @@ dnspython
 pysmb
 pycrypto
 pysocks
+umsgpack
