@@ -1,18 +1,32 @@
 import sys
 import ssl
 import time
-import pickle
 import ldap3
 import logging
 import hashlib
 import getpass
 import sqlite3
+import umsgpack
 import threading
 from ldap3.core.results import RESULT_SIZE_LIMIT_EXCEEDED, RESULT_SUCCESS
 
 from config import TIMEOUT, MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
+
+def deserialize_result(res):
+    if type(res) == dict:
+        for k in res.keys():
+            if type(res[k]) == dict:
+                res[k] = ldap3.utils.ciDict.CaseInsensitiveDict(res[k])
+    return umsgpack.loads(res)
+
+def serialize_result(res):
+    if type(res) == dict:
+        for k in res.keys():
+            if type(res[k]) == ldap3.utils.ciDict.CaseInsensitiveDict:
+                res[k] = dict(res[k])
+    return umsgpack.dumps(res)
 
 class SearchResponse:
     ''' query response object. returns generator with 1 result per call '''
@@ -34,7 +48,7 @@ class SearchResponse:
             logger.debug('SELECT result FROM {} LIMIT {} OFFSET {}'.format(
                 self.key, self.page_size, self.page_size * self.pageno))
             self.pageno += 1
-        return pickle.loads(self.page.pop(0)[0])
+        return deserialize_result(self.page.pop(0)[0])
 
 
 class CachingConnection(ldap3.Connection):
@@ -73,13 +87,15 @@ class CachingConnection(ldap3.Connection):
     def cache_append(self, key, response, query, pageno):
         ''' add each response to the cache as a row in the db '''
         conn = self.get_db_conn()
+        if not key.isalnum():
+            raise ValueError('table name is invalid')
         with conn:
             conn.execute('CREATE TABLE IF NOT EXISTS cache_meta (key TEXT, time INTEGER, server TEXT, query TEXT, user TEXT)')
             conn.execute('INSERT OR REPLACE INTO cache_meta (key, time, server, query, user) VALUES (?, ?, ?, ?, ?)',
                          (key, int(time.time()), self.server_fqdn, query, self.extend.standard.who_am_i().split(':')[-1]))
             conn.execute('CREATE TABLE IF NOT EXISTS {} (result BLOB)'.format(key))
             for r in response:
-                conn.execute('INSERT INTO {} (result) VALUES (?)'.format(key), (pickle.dumps(r),))
+                conn.execute('INSERT INTO {} (result) VALUES (?)'.format(key), (serialize_result(r),))
 
     def get_key(self, search_base, search_filter, search_scope, kwargs):
         # add host/user/controls into key, too?
@@ -90,7 +106,7 @@ class CachingConnection(ldap3.Connection):
 
     def cache_get(self, key):
         conn = self.get_db_conn()
-        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='{}'".format(key))
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (key,))
         exists = (cur.fetchone() is not None)
         if exists:
             return SearchResponse(conn, key)
