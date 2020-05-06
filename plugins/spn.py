@@ -15,9 +15,9 @@ def handler(args, conn):
     response = conn.searchg(args.search_base, '(servicePrincipalName=*)', attributes=['servicePrincipalName'], search_scope=ldap3.SUBTREE)
     s = ''
     for r in response:
-        s += '[{}]\n'.format(r['dn'])
-        for spn in r['attributes']['servicePrincipalName']:
-            s += '    '+spn+'\n'
+        s += '[{}]\n'.format(r[b'dn'].decode('ascii'))
+        for spn in r[b'attributes'][b'servicePrincipalName']:
+            s += '    '+spn.decode('ascii')+'\n'
         s += '\n'
     print(s, end='')
 
