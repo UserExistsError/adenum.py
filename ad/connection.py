@@ -26,7 +26,7 @@ def serialize_result(res):
         for k in res.keys():
             if type(res[k]) == ldap3.utils.ciDict.CaseInsensitiveDict:
                 res[k] = dict(res[k])
-    return umsgpack.dumps(res)
+    return umsgpack.dumps(res, use_bin_type=True)
 
 class SearchResponse:
     ''' query response object. returns generator with 1 result per call '''
