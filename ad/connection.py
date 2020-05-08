@@ -19,7 +19,7 @@ def deserialize_result(res):
         for k in res.keys():
             if type(res[k]) == dict:
                 res[k] = ldap3.utils.ciDict.CaseInsensitiveDict(res[k])
-    return umsgpack.loads(res)
+    return umsgpack.loads(res, encoding="utf-8")
 
 def serialize_result(res):
     if type(res) == dict:
